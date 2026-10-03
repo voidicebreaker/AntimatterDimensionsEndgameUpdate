@@ -110,6 +110,7 @@ export * from "./break-eternity-upgrades";
 export * from "./devtools";
 export * from "./news-ticker";
 export * from "./shop";
+export * from "./overclock";
 export * from "./tabs";
 export * from "./tab-notifications";
 export * from "./speedrun";

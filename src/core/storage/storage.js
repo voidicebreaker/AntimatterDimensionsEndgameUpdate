@@ -576,7 +576,8 @@ export const GameStorage = {
         // The third parameter is a `fast` parameter that we use to only
         // simulate at most 50 ticks if the player was offline for less
         // than 50 seconds.
-        simulateTime(diff / 1000, false, diff < 50 * 1000);
+        // Overclock's Night Shift upgrade makes the time spent away count for more
+        simulateTime(diff / 1000 * Overclock.offlineFlow, false, diff < 50 * 1000);
       } else {
         // This is ugly, should fix how we deal with it...
         this.postLoadStuff();

@@ -882,7 +882,8 @@ export function totalCIPMult() {
   let cipMult = DC.D1
     .timesEffectsOf(
       CelestialInfinityUpgrade.cipMult
-    );
+    )
+    .times(Overclock.celestialMultiplier);
   return cipMult;
 }
 

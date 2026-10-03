@@ -251,6 +251,40 @@ ${Laitela.isUnlocked ? "- <b>DE</b>: Dark Energy<br>" : ""}
         "dt", "tg", "rm", "ap", "bh", "im", "dm", "de"],
       tab: ""
     }, {
+      name: "Overclock",
+      info: () => `
+The Overclock tab holds a set of permanent upgrades which make the whole game run faster. They exist so that the
+later parts of the game can be reached in a reasonable amount of real time.
+<br>
+<br>
+<b>Time Flow:</b> Most Overclocks multiply your Time Flow, which is how many seconds pass in the game for every
+real second. This is not the same thing as game speed: Time Flow multiplies real time itself, so it also speeds up
+everything that normally ignores game speed, such as autobuyer intervals, the Automator, real-time timers and
+records, and every mechanic which only cares about real time. Cutscenes and the ending sequence are not sped up.
+<br>
+<br>
+Some Overclocks only count while a condition is met, and some grow on their own as you make progress. The upgrade
+shows its current value below its description.
+<br>
+<br>
+<b>Interest:</b> The "Interest" Overclocks multiply the amount of a prestige currency you gain by your current
+Time Flow.
+<br>
+<br>
+<b>Offline:</b> Time spent offline is not affected by Time Flow until you buy the "Night Shift" Overclock.
+<br>
+<br>
+Each Overclock can only be bought once and has a requirement which must be met before it can be bought. Overclocks
+are never reset by any prestige layer and cannot be refunded. There is nothing to configure; an Overclock you own
+is always active.
+<br>
+<br>
+Overclock has no effect during a Speedrun.
+`,
+      isUnlocked: () => true,
+      tags: ["overclock", "time", "flow", "speed", "fast", "accelerate", "interest", "offline"],
+      tab: "overclock/upgrades"
+    }, {
       name: "Antimatter Dimensions",
       info: () => `
 Antimatter is a resource that is used throughout the entire game for purchasing various things as you progress. You
