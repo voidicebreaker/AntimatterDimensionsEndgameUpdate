@@ -186,6 +186,10 @@ body.t-s12 {
   border-left-color: var(--color-endgame);
 }
 
+.o-tab-btn--overclock::after {
+  border-left-color: var(--color-overclock);
+}
+
 .o-tab-btn--cd-expansion::after {
   border-left-color: var(--color-alpha--base);
 }
@@ -368,6 +372,16 @@ body.t-s12 {
 
 .o-tab-btn--endgame .o-subtab__tooltip::after {
   border-top-color: var(--color-endgame);
+}
+
+.o-tab-btn--overclock .o-subtab__tooltip {
+  color: var(--color-overclock);
+  background: var(--color-prestige--accent);
+  border-color: var(--color-overclock);
+}
+
+.o-tab-btn--overclock .o-subtab__tooltip::after {
+  border-top-color: var(--color-overclock);
 }
 
 .o-tab-btn--cd-expansion .o-subtab__tooltip {

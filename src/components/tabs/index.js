@@ -56,6 +56,7 @@ import RealityUpgradesTab from "./reality-upgrades/RealityUpgradesTab";
 import ReplicantiTab from "./replicanti/ReplicantiTab";
 import ResurgenceUpgradesTab from "./resurgence-upgrades/ResurgenceUpgradesTab";
 import SecretAchievementTab from "./secret-achievements/SecretAchievementTab";
+import OverclockTab from "./overclock/OverclockTab";
 import ShopTab from "./shop/ShopTab";
 import SlabdrillTab from "./celestial-slabdrill/SlabdrillTab";
 import SpeedrunMilestonesTab from "./speedrun-milestones/SpeedrunMilestonesTab";
@@ -139,6 +140,7 @@ const TabComponents = {
   ResurgenceUpgradesTab,
   TransientUniverseTab,
   TangibleUniverseTab,
+  OverclockTab,
   ShopTab,
   MultiplierBreakdownTab
 };

@@ -355,6 +355,11 @@ window.player = {
     fluxTime: 0,
     maxUnlockedFlux: 2
   },
+  overclock: {
+    upgradeBits: 0,
+    maxAchievements: 0,
+    maxCelestials: 0
+  },
   lastExportTime: Date.now(),
   chall2Pow: 1,
   chall3Pow: DC.D0_01,

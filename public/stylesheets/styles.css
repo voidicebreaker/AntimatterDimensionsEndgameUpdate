@@ -84,6 +84,9 @@ html {
   --color-reality-dark: #0a790c;
   --color-celestials: #5151ec;
   --color-endgame: #fff017;
+  --color-overclock: #12a5a5;
+  --color-overclock-light: #d3fbfb;
+  --color-overclock-dark: #0c7272;
   --color-prestige--accent: white;
 
   --color-teresa--base: #5151ec;
@@ -1012,6 +1015,16 @@ button:focus {
 
 .o-tab-btn--endgame:hover {
   background: var(--color-endgame);
+}
+
+.o-tab-btn--overclock {
+  color: var(--color-overclock);
+  background-color: var(--color-prestige--accent);
+  border-color: var(--color-overclock);
+}
+
+.o-tab-btn--overclock:hover {
+  background: var(--color-overclock);
 }
 
 .o-tab-btn--cd-expansion {

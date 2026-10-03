@@ -91,7 +91,8 @@ export const Enslaved = {
   storeRealTime() {
     if (Pelle.isDoomed && !PelleDestructionUpgrade.blackHole.canBeApplied) return;
     const thisUpdate = Date.now();
-    const diff = Math.max(thisUpdate - player.lastUpdate, 0);
+    // Stored real time is time which would otherwise have passed in the game, so it scales with Overclock too
+    const diff = Math.max(thisUpdate - player.lastUpdate, 0) * Overclock.timeFlow;
     const efficiency = this.storedRealTimeEfficiency;
     const maxTime = this.storedRealTimeCap;
     player.celestials.enslaved.storedReal += diff * efficiency;

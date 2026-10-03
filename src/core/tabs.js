@@ -212,6 +212,7 @@ export const Tabs = (function() {
       Tab.cdexpansion,
       Tab.divinity,
       Tab.universes,
+      Tab.overclock,
       Tab.shop
     ],
     newUI: [
@@ -229,6 +230,7 @@ export const Tabs = (function() {
       Tab.achievements,
       Tab.statistics,
       Tab.options,
+      Tab.overclock,
       Tab.shop
     ],
     get currentUIFormat() {

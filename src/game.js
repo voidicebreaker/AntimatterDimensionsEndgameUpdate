@@ -254,6 +254,7 @@ function totalEPMult() {
   }
   let ep = getAdjustedGlyphEffect("cursedEP")
     .times(ShopPurchase.EPPurchases.currentMult)
+    .times(Overclock.epMultiplier)
     .timesEffectsOf(
       TimeStudy(61),
       TimeStudy(122),
@@ -530,7 +531,7 @@ export function gainedCelestialInfinityPoints() {
 }
 
 function totalCEPMult() {
-  return CelestialEternityUpgrade.cepMult.effectOrDefault(1);
+  return new Decimal(CelestialEternityUpgrade.cepMult.effectOrDefault(1)).times(Overclock.celestialMultiplier);
 }
 
 export function gainedCelestialEternityPoints() {
@@ -737,11 +738,38 @@ export function realTimeMechanics(realDiff) {
   return false;
 }
 
+// Overclock multiplies real time itself. Doing that with one huge tick per frame would make the game very coarse
+// (autobuyers firing once per several seconds of game time, sub-second goals being unreachable), so a live tick is
+// instead split up into several smaller ticks which together cover the same accelerated span. Returns true if the
+// tick was handled here.
+function runOverclockedTick() {
+  if (Overclock.timeFlow <= 1) return false;
+  const start = Date.now();
+  const elapsed = Math.clamp(start - player.lastUpdate, 1, 8.64e7);
+
+  const subticks = Math.clamp(Math.ceil(Overclock.timeFlow), 1, Overclock.maxSubticks);
+  // Never spend more than about half of a frame on this; if the device can't keep up, the remaining time is
+  // simulated in one final, larger tick instead of making the game fall behind
+  const budget = Math.max(player.options.updateRate / 2, 8);
+  let remaining = elapsed;
+  for (let left = subticks; left > 0 && remaining > 0; left--) {
+    const outOfTime = Date.now() - start > budget;
+    const part = (left === 1 || outOfTime) ? remaining : remaining / left;
+    gameLoop(part, { overclocked: true });
+    remaining -= part;
+  }
+  // Every small tick stamps its own starting time, which would make the next frame lose the time spent in here
+  player.lastUpdate = Math.min(player.lastUpdate, start);
+  return true;
+}
+
 // "passDiff" is in ms. It is only unspecified when it's being called normally and not due to simulating time, in which
 // case it uses the gap between now and the last time the function was called (capped at a day). This is on average
 // equal to the update rate, but may be much larger if the game was unfocused or the device went to sleep for some time.
 // eslint-disable-next-line complexity
 export function gameLoop(passedDiff, options = {}) {
+  if (passedDiff === undefined && runOverclockedTick()) return;
+
   PerformanceStats.start("Frame Time");
   PerformanceStats.start("Game Update");
 
@@ -911,6 +939,16 @@ export function gameLoop(passedDiff, options = {}) {
     diff = new Decimal(diff).times(((player.flux.level - 1) * finaltick) + 1);
   }
 
+  // Overclock is applied after all of the cutscene timers above, so that those still play at their intended speed.
+  // Simulated ticks (offline progress and similar) are passed in already scaled, so only live ticks get multiplied.
+  const unscaledRealDiff = realDiff;
+  if (options.overclocked) {
+    const timeFlow = Overclock.timeFlow;
+    realDiff *= timeFlow;
+    diff = new Decimal(diff).times(timeFlow);
+  }
+  Overclock.updateRecords();
+
   // In certain cases we want to allow the player to interact with the game's settings and tabs, but prevent any actual
   // resource generation from happening - in these cases, we have to make sure this all comes before the hibernation
   // check or else it'll attempt to run the game anyway
@@ -919,7 +957,7 @@ export function gameLoop(passedDiff, options = {}) {
     return;
   }
 
-  if (!GameStorage.ignoreBackupTimer) player.backupTimer += realDiff;
+  if (!GameStorage.ignoreBackupTimer) player.backupTimer += unscaledRealDiff;
 
   // For single ticks longer than a minute from the GameInterval loop, we assume that the device has gone to sleep or
   // hibernation - in those cases we stop the interval and simulate time instead. The gameLoop interval automatically
@@ -1042,7 +1080,7 @@ export function gameLoop(passedDiff, options = {}) {
   DeltaTimeState.update(realDiff, diff);
 
   if (player.celestials.slabdrill.isWarping && player.celestials.slabdrill.warpTick < 2000) {
-    player.celestials.slabdrill.warpTick += realDiff;
+    player.celestials.slabdrill.warpTick += unscaledRealDiff;
   }
 
   if (player.celestials.slabdrill.isWarping && player.celestials.slabdrill.warpTick >= 2000 && player.celestials.slabdrill.warpTick < 3000) {
@@ -1050,7 +1088,7 @@ export function gameLoop(passedDiff, options = {}) {
   }
 
   if (player.celestials.slabdrill.isWarping && player.celestials.slabdrill.warpTick >= 3000 && player.celestials.slabdrill.warpTick < 5000) {
-    player.celestials.slabdrill.warpTick += realDiff;
+    player.celestials.slabdrill.warpTick += unscaledRealDiff;
   }
 
   if (player.celestials.slabdrill.isWarping && player.celestials.slabdrill.warpTick >= 2000 && player.celestials.slabdrill.warpTick < 3000
@@ -1397,7 +1435,8 @@ export function gameLoop(passedDiff, options = {}) {
   AutomatorBackend.update(realDiff);
   Pelle.gameLoop(realDiff);
   GalaxyGenerator.loop(realDiff);
-  GameEnd.gameLoop(realDiff);
+  // The ending sequence is a cutscene, so it ignores Overclock
+  GameEnd.gameLoop(unscaledRealDiff);
   LHC.gameLoop(realDiff);
   tryAdvanceSector();
   if (Ascension.isUnlocked) player.endgame.ascensionTimer += realDiff;

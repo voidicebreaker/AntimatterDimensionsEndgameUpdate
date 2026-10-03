@@ -795,5 +795,24 @@ export const tabs = [
         hidable: true,
       },
     ],
+  },
+  {
+    key: "overclock",
+    name: "Overclock",
+    hideAt: 2.4,
+    UIClass: "o-tab-btn--overclock",
+    id: 15,
+    condition: () => !player.speedrun.isActive,
+    hidable: true,
+    subtabs: [
+      {
+        key: "upgrades",
+        name: "Overclock",
+        symbol: "<i class='fas fa-forward'></i>",
+        component: "OverclockTab",
+        id: 0,
+        hidable: true,
+      },
+    ],
   }
 ];
