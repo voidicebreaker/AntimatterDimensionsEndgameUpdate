@@ -257,6 +257,11 @@ The Overclock tab holds a set of permanent upgrades which make the whole game ru
 later parts of the game can be reached in a reasonable amount of real time.
 <br>
 <br>
+<b>Controls:</b> Turn Overclock on or off at any time. Boost adds a base ×5 to Time Flow and prestige gains;
+Turbo adds ×10. These settings are saved and apply to every purchased upgrade. Turning Overclock off returns
+all of its speed and gain multipliers to ×1 without losing purchases.
+<br>
+<br>
 <b>Time Flow:</b> Most Overclocks multiply your Time Flow, which is how many seconds pass in the game for every
 real second. This is not the same thing as game speed: Time Flow multiplies real time itself, so it also speeds up
 everything that normally ignores game speed, such as autobuyer intervals, the Automator, real-time timers and
@@ -268,15 +273,16 @@ shows its current value below its description.
 <br>
 <br>
 <b>Interest:</b> The "Interest" Overclocks multiply the amount of a prestige currency you gain by your current
-Time Flow.
+Time Flow times 5, in addition to the shared prestige bonus. Payday, Compound Dividends, Machine Mint and
+Cosmic Dividends each multiply the shared bonus by another ×5. The shared bonus applies to Infinity Points,
+Eternity Points, Reality Machines, Celestial Points, Celestial Infinity Points and Celestial Eternity Points.
 <br>
 <br>
 <b>Offline:</b> Time spent offline is not affected by Time Flow until you buy the "Night Shift" Overclock.
 <br>
 <br>
 Each Overclock can only be bought once and has a requirement which must be met before it can be bought. Overclocks
-are never reset by any prestige layer and cannot be refunded. There is nothing to configure; an Overclock you own
-is always active.
+are never reset by any prestige layer and cannot be refunded. Purchased effects are active while Overclock is on.
 <br>
 <br>
 Overclock has no effect during a Speedrun.

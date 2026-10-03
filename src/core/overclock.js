@@ -67,7 +67,31 @@ export const Overclock = {
 
   // Speedruns are timed in real time, so Overclock would just be a cheat there
   get isDisabled() {
-    return player.speedrun.isActive;
+    return !this.isEnabled || player.speedrun.isActive;
+  },
+
+  get isEnabled() {
+    return player.overclock.enabled !== false;
+  },
+
+  get power() {
+    return player.overclock.power === 10 ? 10 : 5;
+  },
+
+  setEnabled(enabled) {
+    player.overclock.enabled = Boolean(enabled);
+    this.invalidateMultipliers();
+  },
+
+  setPower(power) {
+    if (power !== 5 && power !== 10) return;
+    player.overclock.power = power;
+    this.invalidateMultipliers();
+  },
+
+  invalidateMultipliers() {
+    GameCache.totalIPMult.invalidate();
+    GameCache.totalCIPMult.invalidate();
   },
 
   get isInChallenge() {
@@ -82,7 +106,7 @@ export const Overclock = {
    */
   get timeFlow() {
     if (this.isDisabled) return 1;
-    let flow = 1;
+    let flow = this.power;
     for (const upgrade of OverclockUpgrades.all) {
       if (upgrade.kind === "flow" && upgrade.isBought) flow *= upgrade.effectValue;
     }
@@ -94,21 +118,35 @@ export const Overclock = {
     return OverclockUpgrade(3).isBought ? this.timeFlow : 1;
   },
 
-  // Multipliers to prestige currency gains; these are 1 until the matching upgrade is bought
+  // The selected power and Dividend upgrades boost all prestige gains immediately.
+  get scoreMultiplier() {
+    if (this.isDisabled) return 1;
+    let mult = this.power;
+    for (const upgrade of OverclockUpgrades.all) {
+      if (upgrade.kind === "gain" && upgrade.isBought) mult *= upgrade.effectValue;
+    }
+    return mult;
+  },
+
+  get interestMultiplier() {
+    return this.isDisabled ? 1 : 5 * this.timeFlow;
+  },
+
+  // Interest upgrades stack with the shared point bonus.
   get ipMultiplier() {
-    return OverclockUpgrade(5).isBought && !this.isDisabled ? this.timeFlow : 1;
+    return this.scoreMultiplier * (OverclockUpgrade(5).isBought ? this.interestMultiplier : 1);
   },
 
   get epMultiplier() {
-    return OverclockUpgrade(9).isBought && !this.isDisabled ? this.timeFlow : 1;
+    return this.scoreMultiplier * (OverclockUpgrade(9).isBought ? this.interestMultiplier : 1);
   },
 
   get rmMultiplier() {
-    return OverclockUpgrade(12).isBought && !this.isDisabled ? this.timeFlow : 1;
+    return this.scoreMultiplier * (OverclockUpgrade(12).isBought ? this.interestMultiplier : 1);
   },
 
   get celestialMultiplier() {
-    return OverclockUpgrade(18).isBought && !this.isDisabled ? this.timeFlow : 1;
+    return this.scoreMultiplier * (OverclockUpgrade(18).isBought ? this.interestMultiplier : 1);
   },
 
   // Achievements and Celestials get taken away by some resets, so the upgrades which count them use the highest

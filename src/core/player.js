@@ -356,6 +356,8 @@ window.player = {
     maxUnlockedFlux: 2
   },
   overclock: {
+    enabled: true,
+    power: 5,
     upgradeBits: 0,
     maxAchievements: 0,
     maxCelestials: 0

@@ -250,7 +250,7 @@ function totalEPMult() {
     if (PelleRealityUpgrade.knowingExistence.canBeApplied) ep = ep.timesEffectOf(RealityUpgrade(12));
     if (PelleDestructionUpgrade.destroyedGlyphEffects.canBeApplied) ep = ep.times(getAdjustedGlyphEffect("timeEP"));
     if (!player.disablePostReality) ep = ep.times(AlphaUnlocks.timestudy61.effects.buff.effectOrDefault(1));
-    return ep;
+    return ep.times(Overclock.epMultiplier);
   }
   let ep = getAdjustedGlyphEffect("cursedEP")
     .times(ShopPurchase.EPPurchases.currentMult)
@@ -1839,14 +1839,15 @@ export function getESPerSecond() {
 }
 
 export function gainedCelestialPoints() {
-  if (!player.break2) return DC.D1;
+  if (!player.break2) return new Decimal(Overclock.scoreMultiplier);
   let cp = player.celestials.pelle.records.totalEndgameAntimatter.add(1).log10().div(9e15);
   if (Achievement(207).isUnlocked && !player.disablePostReality) {
     cp = cp.times(Decimal.max(9e15 * (1e100 ** (0.5 ** player.celestials.pelle.divinities)), player.celestials.pelle.records.totalEndgameAntimatter.add(1).log10()).div(9e15 * (1e100 ** (0.5 ** player.celestials.pelle.divinities))));
   }
   cp = Alpha.isDestroyed ? cp : Decimal.max(Decimal.min(cp, DC.NUMMAX.sub(player.endgame.celestialPoints)), 0);
   cp = Decimal.pow(cp, Decimal.pow(2 * EndgameMastery(232).effectOrDefault(1), player.celestials.pelle.divinities));
-  cp = cp.powEffectsOf(EndgameMastery(212));
+  cp = cp.powEffectsOf(EndgameMastery(212)).times(Overclock.scoreMultiplier);
+  if (!Alpha.isDestroyed) cp = cp.clampMax(Decimal.max(DC.NUMMAX.sub(player.endgame.celestialPoints), 0));
   return cp.floor();
 }
 
