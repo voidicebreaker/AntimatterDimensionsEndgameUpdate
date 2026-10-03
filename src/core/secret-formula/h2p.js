@@ -259,7 +259,12 @@ later parts of the game can be reached in a reasonable amount of real time.
 <br>
 <b>Controls:</b> Turn Overclock on or off at any time. Boost adds a base ×5 to Time Flow and prestige gains;
 Turbo adds ×10. These settings are saved and apply to every purchased upgrade. Turning Overclock off returns
-all of its speed and gain multipliers to ×1 without losing purchases.
+all of its speed and gain multipliers to ×1 without losing purchases. Click a purchased upgrade to toggle
+just that upgrade. Individual settings survive reloads and master toggles.
+<br>
+<br>
+<b>Upgrade strength:</b> Each upgrade keeps 30% of its previous bonus above ×1. For example, ×5 becomes ×2.2,
+×2 becomes ×1.3, and ×1.5 becomes ×1.15. Boost and Turbo retain their base ×5 and ×10 settings.
 <br>
 <br>
 <b>Time Flow:</b> Most Overclocks multiply your Time Flow, which is how many seconds pass in the game for every
@@ -269,20 +274,21 @@ records, and every mechanic which only cares about real time. Cutscenes and the 
 <br>
 <br>
 Some Overclocks only count while a condition is met, and some grow on their own as you make progress. The upgrade
-shows its current value below its description.
+shows its current value below its description. Snowball counts only individually enabled upgrades.
 <br>
 <br>
 <b>Interest:</b> The "Interest" Overclocks multiply the amount of a prestige currency you gain by your current
-Time Flow times 5, in addition to the shared prestige bonus. Payday, Compound Dividends, Machine Mint and
-Cosmic Dividends each multiply the shared bonus by another ×5. The shared bonus applies to Infinity Points,
+Time Flow times 5, with only 30% of that bonus above ×1 applied. This stacks with the shared prestige bonus.
+Payday, Compound Dividends, Machine Mint and Cosmic Dividends each multiply the shared bonus by another ×2.2. The shared bonus applies to Infinity Points,
 Eternity Points, Reality Machines, Celestial Points, Celestial Infinity Points and Celestial Eternity Points.
 <br>
 <br>
-<b>Offline:</b> Time spent offline is not affected by Time Flow until you buy the "Night Shift" Overclock.
+<b>Offline:</b> Night Shift applies 30% of the extra Time Flow speed while offline. It must be purchased and
+enabled, and the master switch must be on.
 <br>
 <br>
 Each Overclock can only be bought once and has a requirement which must be met before it can be bought. Overclocks
-are never reset by any prestige layer and cannot be refunded. Purchased effects are active while Overclock is on.
+are never reset by any prestige layer and cannot be refunded. Purchased effects are active while both their individual toggle and the master switch are on.
 <br>
 <br>
 Overclock has no effect during a Speedrun.

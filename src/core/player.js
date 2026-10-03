@@ -359,6 +359,7 @@ window.player = {
     enabled: true,
     power: 5,
     upgradeBits: 0,
+    disabledUpgradeBits: 0,
     maxAchievements: 0,
     maxCelestials: 0
   },

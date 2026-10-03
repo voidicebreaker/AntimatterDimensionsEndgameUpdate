@@ -19,6 +19,8 @@ export default {
   data() {
     return {
       isBought: false,
+      isEnabled: false,
+      isEffectActive: false,
       isAvailableForPurchase: false,
       canBeBought: false,
     };
@@ -30,6 +32,7 @@ export default {
     classObject() {
       return {
         "c-overclock-upgrade-btn--bought": this.isBought,
+        "c-overclock-upgrade-btn--disabled": this.isBought && !this.isEnabled,
         "c-overclock-upgrade-btn--unavailable": !this.isBought && this.isAvailableForPurchase && !this.canBeBought,
         "c-overclock-upgrade-btn--locked": !this.isBought && !this.isAvailableForPurchase,
       };
@@ -39,15 +42,27 @@ export default {
       return this.config.formatEffect !== undefined;
     },
     showEffect() {
-      return this.hasDynamicEffect && (this.isBought || this.config.kind === "flow");
+      return this.hasDynamicEffect && (this.isEffectActive || !this.isBought && this.config.kind === "flow");
+    },
+    buttonLabel() {
+      return this.isBought
+        ? `${this.upgrade.name}: ${this.isEnabled ? "ON" : "OFF"}`
+        : `Buy ${this.upgrade.name}`;
     }
   },
   methods: {
     update() {
       const upgrade = this.upgrade;
       this.isBought = upgrade.isBought;
+      this.isEnabled = upgrade.isEnabled;
+      this.isEffectActive = upgrade.isEffectActive;
       this.isAvailableForPurchase = upgrade.isAvailableForPurchase;
       this.canBeBought = upgrade.canBeBought;
+    },
+    click() {
+      if (this.isBought) this.upgrade.toggle();
+      else this.upgrade.purchase();
+      this.update();
     }
   }
 };
@@ -56,8 +71,10 @@ export default {
 <template>
   <button
     :class="classObject"
+    :aria-label="buttonLabel"
+    :aria-pressed="isBought ? String(isEnabled) : undefined"
     class="l-overclock-upgrade-btn c-overclock-upgrade-btn"
-    @click="upgrade.purchase()"
+    @click="click"
   >
     <span class="c-overclock-upgrade-btn__name">{{ upgrade.name }}</span>
     <span>
@@ -81,6 +98,15 @@ export default {
         </template>
       </template>
     </span>
+    <span
+      v-if="isBought"
+      class="c-overclock-upgrade-btn__toggle"
+    >
+      {{ isEnabled ? "ON — click to disable" : "OFF — click to enable" }}
+      <template v-if="isEnabled && !isEffectActive">
+        (master paused)
+      </template>
+    </span>
   </button>
 </template>
 
@@ -89,11 +115,11 @@ export default {
   display: flex;
   flex-direction: column;
   width: 20.5rem;
-  height: 11rem;
+  min-height: 13rem;
   justify-content: center;
   align-items: center;
   margin: 0.8rem;
-  padding: 0 0.5rem;
+  padding: 0.5rem;
 }
 
 .c-overclock-upgrade-btn {
@@ -128,17 +154,29 @@ export default {
   font-weight: bold;
 }
 
+.c-overclock-upgrade-btn__toggle {
+  font-weight: bold;
+  margin-top: 0.5rem;
+}
+
 .c-overclock-upgrade-btn--bought,
 .c-overclock-upgrade-btn--bought:hover {
   color: white;
   background-color: var(--color-overclock-dark);
   border-color: var(--color-overclock);
-  cursor: default;
+  cursor: pointer;
 }
 
 .c-overclock-upgrade-btn--bought .c-overclock-upgrade-btn__name,
 .c-overclock-upgrade-btn--bought:hover .c-overclock-upgrade-btn__name {
   color: var(--color-overclock-light);
+}
+
+.c-overclock-upgrade-btn--disabled,
+.c-overclock-upgrade-btn--disabled:hover {
+  color: var(--color-text);
+  background-color: var(--color-base);
+  border-style: dashed;
 }
 
 .c-overclock-upgrade-btn--unavailable,

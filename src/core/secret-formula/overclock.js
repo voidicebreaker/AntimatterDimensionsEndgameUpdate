@@ -1,14 +1,16 @@
-// Overclock upgrades are single-purchase and permanent; their effects follow the master toggle.
+import { scaleOverclockMultiplier } from "../overclock-balance";
+
+// Overclock upgrades are single-purchase and permanent; their effects follow the master and individual toggles.
 //
 // Every upgrade has a `kind`:
 //   "flow"    - `effect` is a multiplier to Time Flow (how many seconds of game pass for every real second)
-//   "score"   - multiplies a prestige currency gain by five times Time Flow
+//   "score"   - scales a matching prestige currency gain with Time Flow
 //   "gain"    - multiplies all prestige currency gains, stacking with Interest upgrades
 //   "offline" - makes offline progress use Time Flow as well
 //
 // `checkRequirement` is evaluated live; an upgrade which has already been bought is never lost again.
 
-const flowText = value => `Time Flow ${Number.isInteger(value) ? formatX(value) : formatX(value, 2, 2)}`;
+const flowText = value => `Time Flow ${formatX(scaleOverclockMultiplier(value), 3, 3)}`;
 
 export const overclockUpgrades = [
   // Row 1: Infinity
@@ -46,7 +48,7 @@ export const overclockUpgrades = [
     currency: () => Currency.infinityPoints,
     currencyName: "Infinity Point",
     cost: 10,
-    description: "Time Flow also applies to time spent offline",
+    description: "Apply 30% of the extra Time Flow speed while offline",
   },
   {
     id: 4,
@@ -69,9 +71,9 @@ export const overclockUpgrades = [
     currency: () => Currency.infinityPoints,
     currencyName: "Infinity Point",
     cost: 100,
-    description: "Infinity Point gain is multiplied by 5 times your Time Flow",
+    description: "Infinity Point gain gets 30% of the bonus from 5 times your Time Flow",
     effect: () => Overclock.interestMultiplier,
-    formatEffect: value => formatX(value, 2, 2),
+    formatEffect: value => formatX(value, 3, 3),
   },
 
   // Row 2: Eternity
@@ -109,9 +111,9 @@ export const overclockUpgrades = [
     currency: () => Currency.eternityPoints,
     currencyName: "Eternity Point",
     cost: 1e6,
-    description: () => `Time Flow +${formatPercents(0.01)} for every Achievement you have ever had at once`,
+    description: () => `Time Flow +${formatPercents(0.003, 1)} for every Achievement you have ever had at once`,
     effect: () => 1 + player.overclock.maxAchievements / 100,
-    formatEffect: value => formatX(value, 2, 2),
+    formatEffect: value => formatX(value, 3, 3),
   },
   {
     id: 9,
@@ -122,9 +124,9 @@ export const overclockUpgrades = [
     currency: () => Currency.eternityPoints,
     currencyName: "Eternity Point",
     cost: 1e6,
-    description: "Eternity Point gain is multiplied by 5 times your Time Flow",
+    description: "Eternity Point gain gets 30% of the bonus from 5 times your Time Flow",
     effect: () => Overclock.interestMultiplier,
-    formatEffect: value => formatX(value, 2, 2),
+    formatEffect: value => formatX(value, 3, 3),
   },
   {
     id: 10,
@@ -161,9 +163,9 @@ export const overclockUpgrades = [
     currency: () => Currency.realityMachines,
     currencyName: "Reality Machine",
     cost: 10,
-    description: "Reality Machine gain is multiplied by 5 times your Time Flow",
+    description: "Reality Machine gain gets 30% of the bonus from 5 times your Time Flow",
     effect: () => Overclock.interestMultiplier,
-    formatEffect: value => formatX(value, 2, 2),
+    formatEffect: value => formatX(value, 3, 3),
   },
   {
     id: 13,
@@ -174,9 +176,10 @@ export const overclockUpgrades = [
     currency: () => Currency.realityMachines,
     currencyName: "Reality Machine",
     cost: 1e6,
-    description: () => `Time Flow +${formatPercents(0.02)} (compounding) for every Overclock you own`,
-    effect: () => Math.pow(1.02, OverclockUpgrades.boughtCount),
-    formatEffect: value => formatX(value, 2, 2),
+    description: () => `Time Flow gains ${formatPercents(0.3)} of the bonus from ` +
+      `${formatPercents(0.02)} compounding per enabled Overclock`,
+    effect: () => Math.pow(1.02, OverclockUpgrades.enabledCount),
+    formatEffect: value => formatX(value, 3, 3),
   },
   {
     id: 14,
@@ -187,9 +190,10 @@ export const overclockUpgrades = [
     currency: () => Currency.realityMachines,
     currencyName: "Reality Machine",
     cost: 1e12,
-    description: () => `Time Flow +${formatPercents(0.1)} (compounding) for every Celestial you have ever unlocked`,
+    description: () => `Time Flow gains ${formatPercents(0.3)} of the bonus from ` +
+      `${formatPercents(0.1)} compounding per unlocked Celestial`,
     effect: () => Math.pow(1.1, player.overclock.maxCelestials),
-    formatEffect: value => formatX(value, 2, 2),
+    formatEffect: value => formatX(value, 3, 3),
   },
   {
     id: 15,
@@ -239,9 +243,10 @@ export const overclockUpgrades = [
     currency: () => Currency.celestialPoints,
     currencyName: "Celestial Point",
     cost: new Decimal("1e300"),
-    description: "Celestial Infinity Point and Celestial Eternity Point gain is multiplied by 5 times your Time Flow",
+    description: "Celestial Infinity Point and Celestial Eternity Point gain gets " +
+      "30% of the bonus from 5 times your Time Flow",
     effect: () => Overclock.interestMultiplier,
-    formatEffect: value => formatX(value, 2, 2),
+    formatEffect: value => formatX(value, 3, 3),
   },
   {
     id: 19,
@@ -291,7 +296,8 @@ export const overclockUpgrades = [
     currency: () => Currency.infinityPoints,
     currencyName: "Infinity Point",
     cost: 25,
-    description: () => `Shared prestige gain bonus ${formatX(5)}, stacking with Interest upgrades`,
+    description: () =>
+      `Shared prestige gain bonus ${formatX(scaleOverclockMultiplier(5), 1, 1)}, stacking with Interest upgrades`,
     effect: 5,
   },
   {
@@ -315,7 +321,8 @@ export const overclockUpgrades = [
     currency: () => Currency.eternityPoints,
     currencyName: "Eternity Point",
     cost: 1e8,
-    description: () => `Shared prestige gain bonus ${formatX(5)}, stacking with Interest upgrades`,
+    description: () =>
+      `Shared prestige gain bonus ${formatX(scaleOverclockMultiplier(5), 1, 1)}, stacking with Interest upgrades`,
     effect: 5,
   },
   {
@@ -339,7 +346,8 @@ export const overclockUpgrades = [
     currency: () => Currency.realityMachines,
     currencyName: "Reality Machine",
     cost: 1e5,
-    description: () => `Shared prestige gain bonus ${formatX(5)}, stacking with Interest upgrades`,
+    description: () =>
+      `Shared prestige gain bonus ${formatX(scaleOverclockMultiplier(5), 1, 1)}, stacking with Interest upgrades`,
     effect: 5,
   },
   {
@@ -363,7 +371,19 @@ export const overclockUpgrades = [
     currency: () => Currency.celestialPoints,
     currencyName: "Celestial Point",
     cost: 1e10,
-    description: () => `Shared prestige gain bonus ${formatX(5)}, stacking with Interest upgrades`,
+    description: () =>
+      `Shared prestige gain bonus ${formatX(scaleOverclockMultiplier(5), 1, 1)}, stacking with Interest upgrades`,
     effect: 5,
   },
-];
+].map(config => {
+  // Scale the extra benefit once, after evaluating any dynamic growth or condition.
+  // Interest and offline bonuses are scaled in Overclock because they depend on total Time Flow.
+  if (config.kind !== "flow" && config.kind !== "gain") return config;
+  const effect = config.effect;
+  return {
+    ...config,
+    effect: typeof effect === "function"
+      ? () => scaleOverclockMultiplier(effect())
+      : scaleOverclockMultiplier(effect)
+  };
+});

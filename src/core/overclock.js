@@ -1,4 +1,5 @@
 import { BitPurchasableMechanicState } from "./game-mechanics";
+import { scaleOverclockMultiplier } from "./overclock-balance";
 
 class OverclockUpgradeState extends BitPurchasableMechanicState {
   get name() {
@@ -29,6 +30,27 @@ class OverclockUpgradeState extends BitPurchasableMechanicState {
     return this.config.checkRequirement();
   }
 
+  get isEnabled() {
+    return this.isBought && (player.overclock.disabledUpgradeBits & (1 << this.id)) === 0;
+  }
+
+  get isEffectActive() {
+    return this.isEnabled && !Overclock.isDisabled;
+  }
+
+  setEnabled(enabled) {
+    if (!this.isBought) return false;
+    if (enabled) player.overclock.disabledUpgradeBits &= ~(1 << this.id);
+    else player.overclock.disabledUpgradeBits |= (1 << this.id);
+    Overclock.invalidateMultipliers();
+    GameUI.update();
+    return true;
+  }
+
+  toggle() {
+    return this.setEnabled(!this.isEnabled);
+  }
+
   onPurchased() {
     GameCache.totalIPMult.invalidate();
     GameCache.totalCIPMult.invalidate();
@@ -54,6 +76,9 @@ export const OverclockUpgrades = {
   all: OverclockUpgradeState.index.compact(),
   get flow() {
     return this.all.filter(u => u.kind === "flow");
+  },
+  get enabledCount() {
+    return this.all.countWhere(u => u.isEnabled);
   },
   get boughtCount() {
     return this.all.countWhere(u => u.isBought);
@@ -108,14 +133,14 @@ export const Overclock = {
     if (this.isDisabled) return 1;
     let flow = this.power;
     for (const upgrade of OverclockUpgrades.all) {
-      if (upgrade.kind === "flow" && upgrade.isBought) flow *= upgrade.effectValue;
+      if (upgrade.kind === "flow" && upgrade.isEffectActive) flow *= upgrade.effectValue;
     }
     return flow;
   },
 
   // Time Flow as applied to offline time and to catching up after the device was asleep
   get offlineFlow() {
-    return OverclockUpgrade(3).isBought ? this.timeFlow : 1;
+    return OverclockUpgrade(3).isEffectActive ? scaleOverclockMultiplier(this.timeFlow) : 1;
   },
 
   // The selected power and Dividend upgrades boost all prestige gains immediately.
@@ -123,30 +148,30 @@ export const Overclock = {
     if (this.isDisabled) return 1;
     let mult = this.power;
     for (const upgrade of OverclockUpgrades.all) {
-      if (upgrade.kind === "gain" && upgrade.isBought) mult *= upgrade.effectValue;
+      if (upgrade.kind === "gain" && upgrade.isEffectActive) mult *= upgrade.effectValue;
     }
     return mult;
   },
 
   get interestMultiplier() {
-    return this.isDisabled ? 1 : 5 * this.timeFlow;
+    return this.isDisabled ? 1 : scaleOverclockMultiplier(5 * this.timeFlow);
   },
 
   // Interest upgrades stack with the shared point bonus.
   get ipMultiplier() {
-    return this.scoreMultiplier * (OverclockUpgrade(5).isBought ? this.interestMultiplier : 1);
+    return this.scoreMultiplier * (OverclockUpgrade(5).isEffectActive ? this.interestMultiplier : 1);
   },
 
   get epMultiplier() {
-    return this.scoreMultiplier * (OverclockUpgrade(9).isBought ? this.interestMultiplier : 1);
+    return this.scoreMultiplier * (OverclockUpgrade(9).isEffectActive ? this.interestMultiplier : 1);
   },
 
   get rmMultiplier() {
-    return this.scoreMultiplier * (OverclockUpgrade(12).isBought ? this.interestMultiplier : 1);
+    return this.scoreMultiplier * (OverclockUpgrade(12).isEffectActive ? this.interestMultiplier : 1);
   },
 
   get celestialMultiplier() {
-    return this.scoreMultiplier * (OverclockUpgrade(18).isBought ? this.interestMultiplier : 1);
+    return this.scoreMultiplier * (OverclockUpgrade(18).isEffectActive ? this.interestMultiplier : 1);
   },
 
   // Achievements and Celestials get taken away by some resets, so the upgrades which count them use the highest

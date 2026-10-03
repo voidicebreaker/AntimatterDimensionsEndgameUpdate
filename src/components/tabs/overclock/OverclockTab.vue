@@ -10,6 +10,7 @@ export default {
     return {
       timeFlow: 1,
       bought: 0,
+      enabled: 0,
       isEnabled: true,
       isSpeedrun: false,
       power: 5,
@@ -34,11 +35,12 @@ export default {
     update() {
       this.timeFlow = Overclock.timeFlow;
       this.bought = OverclockUpgrades.boughtCount;
+      this.enabled = OverclockUpgrades.enabledCount;
       this.isEnabled = Overclock.isEnabled;
       this.isSpeedrun = player.speedrun.isActive;
       this.power = Overclock.power;
       this.scoreMultiplier = Overclock.scoreMultiplier;
-      this.hasOffline = OverclockUpgrade(3).isBought && !Overclock.isDisabled;
+      this.hasOffline = OverclockUpgrade(3).isEffectActive;
     },
     toggle() {
       Overclock.setEnabled(!this.isEnabled);
@@ -64,7 +66,7 @@ export default {
     <div class="c-overclock-controls">
       <button
         class="o-primary-btn"
-        :aria-pressed="isEnabled"
+        :aria-pressed="String(isEnabled)"
         :disabled="isSpeedrun"
         @click="toggle"
       >
@@ -75,7 +77,7 @@ export default {
         :key="setting"
         class="o-primary-btn"
         :class="{ 'c-overclock-controls__selected': power === setting }"
-        :aria-pressed="power === setting"
+        :aria-pressed="String(power === setting)"
         :disabled="isSpeedrun"
         @click="setPower(setting)"
       >
@@ -96,14 +98,16 @@ export default {
       Time Flow speeds up everything at once: production, autobuyers, and every mechanic which runs on real time.
       <br>
       Shared prestige gain bonus: {{ formatX(scoreMultiplier, 2, 2) }} to IP, EP, RM, CP, CIP and CEP.
-      Interest upgrades multiply their matching gains by another {{ formatInt(5) }} times Time Flow.
+      Enabled Interest upgrades apply {{ formatPercents(0.3) }} of the bonus from {{ formatInt(5) }} times Time Flow.
       <br>
       Boost and Turbo multiply both base speed and prestige gains before your purchased upgrades.
       <br>
-      It {{ hasOffline ? "also applies" : "does not apply" }} while you are offline.
+      <span v-if="hasOffline">Night Shift applies {{ formatPercents(0.3) }} of the extra Time Flow speed offline.</span>
+      <span v-else>Time Flow does not apply while you are offline.</span>
       Overclocks are permanent, cannot be refunded, and are kept through every kind of reset.
       <br>
       You own {{ formatInt(bought) }} of {{ formatInt(total) }} Overclocks.
+      {{ formatInt(enabled) }} individually enabled. Click any purchased upgrade to toggle it.
     </div>
     <div
       v-for="row in rows"
