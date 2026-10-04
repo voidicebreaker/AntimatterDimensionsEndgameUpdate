@@ -407,6 +407,9 @@ export const AutomatorBackend = {
   },
 
   set mode(value) {
+    if (ECScheduler.isRunning && (value === AUTOMATOR_MODE.RUN || value === AUTOMATOR_MODE.SINGLE_STEP)) {
+      ECScheduler.pause("Automator resumed or stepped. EC scheduler paused.");
+    }
     this.state.mode = value;
   },
 
@@ -717,6 +720,7 @@ export const AutomatorBackend = {
   },
 
   update(diff) {
+    if (ECScheduler.isRunning) return;
     if (!this.isOn) return;
     let stack;
     switch (this.mode) {
@@ -792,6 +796,7 @@ export const AutomatorBackend = {
   },
 
   singleStep() {
+    if (ECScheduler.isRunning) ECScheduler.pause("Automator single-step requested. EC scheduler paused.");
     if (this.stack.isEmpty) return;
     // SAME_INSTRUCTION is used to enter blocks; this means we've successfully
     // advanced a line. Otherwise, we always advance a line, regardless of return
@@ -966,6 +971,7 @@ export const AutomatorBackend = {
   },
 
   start(scriptID = this.state.topLevelScript, initialMode = AUTOMATOR_MODE.RUN, compile = true) {
+    if (ECScheduler.isRunning) ECScheduler.pause("Automator started. EC scheduler paused.");
     // Automator execution behaves oddly across new games, so we explicitly stop it from running if not unlocked
     if (!Player.automatorUnlocked) return;
     this.hasJustCompleted = false;

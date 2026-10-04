@@ -1,6 +1,7 @@
 <script>
 import ChallengeGrid from "@/components/ChallengeGrid";
 import ChallengeTabHeader from "@/components/ChallengeTabHeader";
+import ECSchedulerPanel from "./ECSchedulerPanel";
 import EternityChallengeBox from "./EternityChallengeBox";
 
 export default {
@@ -8,7 +9,8 @@ export default {
   components: {
     ChallengeTabHeader,
     ChallengeGrid,
-    EternityChallengeBox
+    EternityChallengeBox,
+    ECSchedulerPanel
   },
   data() {
     return {
@@ -76,6 +78,7 @@ export default {
 <template>
   <div class="l-challenges-tab">
     <ChallengeTabHeader />
+    <ECSchedulerPanel />
     <div v-if="isAutoECVisible">
       Eternity Challenges are automatically completed sequentially, requiring all previous
       Eternity Challenges to be fully completed before any progress is made.

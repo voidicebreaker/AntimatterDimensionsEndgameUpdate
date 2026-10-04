@@ -888,6 +888,25 @@ that particular Eternity Challenge, meaning you only need to complete the second
 As a result, you can unlock an Eternity Challenge with one set of studies, and then respec into a different set of
 studies to beat the challenge. EC11 and EC12 are exceptions to this rule - the Dimension path restrictions remain even
 if you respec your time studies.
+<br>
+<br>
+<b>EC Scheduler (after Reality)</b><br>
+The EC Scheduler on this tab runs selected challenges using your current studies, resources, perks, and completion goals.
+Choose the challenges and target tiers, then press Start / Resume. It buys studies and production upgrades, performs
+Eternities to respec conflicting trees, verifies challenge entry, and claims earned completions. Without the ECB perk
+it claims one tier at a time. With ECB it can claim multiple tiers, including partial progress before a run stalls.
+<br>
+<br>
+Balanced gives attempts more time; Fast uses shorter trials. Unsuccessful attempts are deferred while other challenges
+or EP/TT farming can improve your build. If the farming budget produces no further completions, it pauses with a reason.
+You can provide your own study routes and adjust EC8's limited Replicanti purchases under the advanced controls.
+Your Dimension, Tickspeed, and Galaxy autobuyers should be enabled and configured for progression.
+<br>
+<br>
+While running, the scheduler takes control of Crunches and Eternities and suspends the Automator and automatic Reality
+resets. Pause or Stop releases that control without changing their saved settings. It leaves the current challenge in
+place. Manual prestiges or study changes pause the scheduler; saved sessions load paused for revalidation.
+Overclock choices remain unchanged. Special celestial runs and active Time Dilation are not supported yet.
 `,
       isUnlocked: () => PlayerProgress.eternityUnlocked(),
       tags: ["ec", "study", "time", "rewards", "completions", "midgame"],

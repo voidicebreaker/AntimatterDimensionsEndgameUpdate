@@ -363,6 +363,20 @@ window.player = {
     maxAchievements: 0,
     maxCelestials: 0
   },
+  ecScheduler: {
+    running: false,
+    mode: "balanced",
+    enabled: Array.repeat(true, 12),
+    targets: Array.repeat(5, 12),
+    trees: Array.repeat("", 12),
+    notes: Array.repeat("", 12),
+    ec8Chance: 9,
+    ec8Interval: 10,
+    phase: "idle",
+    current: 0,
+    status: "Ready. Select your EC targets, then start.",
+    log: []
+  },
   lastExportTime: Date.now(),
   chall2Pow: 1,
   chall3Pow: DC.D0_01,

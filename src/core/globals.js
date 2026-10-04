@@ -91,6 +91,7 @@ export * from "./normal-challenges";
 export * from "./infinity-challenges";
 export * from "./eternity";
 export * from "./eternity-challenge";
+export * from "./ec-scheduler";
 export * from "./reality";
 export * from "./replicanti";
 export * from "./time-theorems";

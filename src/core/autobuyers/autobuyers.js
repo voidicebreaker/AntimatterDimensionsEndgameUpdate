@@ -189,6 +189,7 @@ export const Autobuyers = (function() {
       // The canTick condition must be checked after the previous autobuyer has triggered
       // in order to avoid slow dimension autobuyers.
       for (const autobuyer of Autobuyers.all) {
+        if (ECScheduler.controlsAutobuyer(autobuyer)) continue;
         if (autobuyer.canTick) autobuyer.tick();
       }
 
