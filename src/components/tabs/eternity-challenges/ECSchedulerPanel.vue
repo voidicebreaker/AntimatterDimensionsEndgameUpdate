@@ -126,6 +126,8 @@ export default {
       yield control. Pause or Stop releases them and keeps your current challenge.
       Overclock settings stay under your control. Saved sessions load paused.
       Targets are minimums; the bulk-completion perk may award extra tiers.
+      Use "ec scheduler run" in an Automator script to run this automatically each Reality.
+      An Automator-owned session pauses its script if stopped or interrupted.
     </p>
     <div class="c-ec-scheduler__controls">
       <button

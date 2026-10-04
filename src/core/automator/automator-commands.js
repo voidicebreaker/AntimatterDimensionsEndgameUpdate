@@ -1,4 +1,5 @@
 import { standardizeAutomatorValues, tokenMap as T } from "./lexer";
+import { ECSchedulerCommands } from "./ec-scheduler-commands";
 
 /**
  * Note: the $ shorthand for the parser object is required by Chevrotain. Don't mess with it.
@@ -83,6 +84,7 @@ function findLastPrestigeRecord(layer) {
 }
 
 export const AutomatorCommands = [
+  ...ECSchedulerCommands,
   {
     id: "auto",
     rule: $ => () => {

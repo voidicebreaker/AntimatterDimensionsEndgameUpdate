@@ -29,6 +29,19 @@ CodeMirror.registerHelper("hint", "anyword", editor => {
   let start = cursor.ch;
   const end = cursor.ch;
   const line = editor.getLine(cursor.line);
+  // These commands use phrase tokens, so incomplete phrases need completion before normal lexing.
+  const schedulerPrefix = line.slice(0, end).trimStart().toLowerCase();
+  if (/^ec(?:\s|$)/u.test(schedulerPrefix)) {
+    const selectors = ["all", ...Array.range(1, 12).map(id => `ec${id}`)];
+    const commands = ["ec scheduler run", "ec scheduler run fast", "ec scheduler run balanced",
+      ...selectors.flatMap(id => [`ec scheduler on ${id}`, `ec scheduler off ${id}`,
+        ...Array.range(1, 5).map(target => `ec scheduler target ${id} ${target}`)])];
+    return {
+      list: commands.filter(command => command.startsWith(schedulerPrefix) && command !== schedulerPrefix),
+      from: CodeMirror.Pos(cursor.line, line.length - line.trimStart().length),
+      to: CodeMirror.Pos(cursor.line, end)
+    };
+  }
   while (start && /\w/u.test(line.charAt(start - 1)))--start;
   const lineStart = line.slice(0, start);
   const currentPrefix = line.slice(start, end);
@@ -60,6 +73,7 @@ CodeMirror.defineSimpleMode("automato", {
   // The start state contains the rules that are intially used
   start: [
     commentRule,
+    { regex: /ec[ \t]+scheduler[ \t]+(run|on|off|target)\b/ui, token: "keyword", next: "schedulerArgs" },
     { regex: /studies\s+/ui, token: "keyword", next: "studiesArgs" },
     { regex: /blob\s\s/ui, token: "blob" },
     {
@@ -83,6 +97,14 @@ CodeMirror.defineSimpleMode("automato", {
     { regex: /pause|restart/ui, token: "keyword", next: "commandDone" },
     { regex: /\}/ui, dedent: true },
     { regex: /\S+\s/ui, token: "error", next: "commandDone" },
+  ],
+  schedulerArgs: [
+    commentRule,
+    { sol: true, next: "start" },
+    { regex: /(?:fast|balanced|all)\b/ui, token: "property" },
+    { regex: /ec\s*(?:1[0-2]|[1-9])\b/ui, token: "number" },
+    { regex: /[1-5]\b/ui, token: "number" },
+    { regex: /\S+/ui, token: "error" },
   ],
   studiesArgs: [
     commentRule,

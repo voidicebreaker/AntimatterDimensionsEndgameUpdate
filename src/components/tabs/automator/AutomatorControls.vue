@@ -19,6 +19,7 @@ export default {
       hasErrors: false,
       currentLine: 0,
       statusName: "",
+      schedulerStatus: "",
       editingName: "",
       editingDifferentScript: false,
       currentChars: 0,
@@ -54,6 +55,7 @@ export default {
       lineNum = lineNum.slice(lineNum.length - digits);
 
       if (this.isPaused) return `Paused: "${this.statusName}" (Resumes on Line ${lineNum})`;
+      if (this.schedulerStatus) return `EC Scheduler (Line ${lineNum}): ${this.schedulerStatus}`;
       if (this.isRunning) return `Running: "${this.statusName}" (Line ${lineNum})`;
       if (this.hasErrors) return `Stopped: "${this.statusName}" has errors (Cannot run)`;
       return `Stopped: Will start running "${this.statusName}"`;
@@ -65,6 +67,7 @@ export default {
   methods: {
     update() {
       this.isRunning = AutomatorBackend.isRunning;
+      this.schedulerStatus = ECScheduler.automatorOwned ? ECScheduler.data.status : "";
       this.isPaused = AutomatorBackend.isOn && !this.isRunning;
       this.repeatOn = AutomatorBackend.state.repeat;
       this.justCompleted = AutomatorBackend.hasJustCompleted;

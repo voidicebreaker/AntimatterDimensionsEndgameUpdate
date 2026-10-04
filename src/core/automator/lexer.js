@@ -373,6 +373,11 @@ createKeyword("StoreGameTime", /stored?[ \t]+game[ \t]+time/i, {
 });
 
 createKeyword("Dilation", /dilation/i);
+// Full phrases avoid reserving common constant names such as "run", "fast", or "all".
+createKeyword("ECSchedulerRun", /ec[ \t]+scheduler[ \t]+run/i, { $autocomplete: "ec scheduler run" });
+createKeyword("ECSchedulerOn", /ec[ \t]+scheduler[ \t]+on/i, { $autocomplete: "ec scheduler on" });
+createKeyword("ECSchedulerOff", /ec[ \t]+scheduler[ \t]+off/i, { $autocomplete: "ec scheduler off" });
+createKeyword("ECSchedulerTarget", /ec[ \t]+scheduler[ \t]+target/i, { $autocomplete: "ec scheduler target" });
 createKeyword("EC", /ec/i);
 createKeyword("XHighest", /x[ \t]+highest/i, {
   $autocomplete: "x highest",

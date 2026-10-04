@@ -59,6 +59,28 @@ const AUTOMATOR_BLOCKS_RESETS = ["INFINITY", "ETERNITY", "REALITY", "DOOM", "ARM
  */
 export const automatorBlocks = [
   {
+    cmd: "EC SCHEDULER RUN",
+    allowedPatterns: ["A"],
+    A: ["", "FAST", "BALANCED"],
+    targets: ["singleSelectionInput"]
+  }, {
+    cmd: "EC SCHEDULER ON",
+    allowedPatterns: ["A"],
+    A: ["ALL", ...Array.range(1, 12).map(id => `EC${id}`)],
+    targets: ["singleSelectionInput"]
+  }, {
+    cmd: "EC SCHEDULER OFF",
+    allowedPatterns: ["A"],
+    A: ["ALL", ...Array.range(1, 12).map(id => `EC${id}`)],
+    targets: ["singleSelectionInput"]
+  }, {
+    cmd: "EC SCHEDULER TARGET",
+    allowedPatterns: ["AB"],
+    A: ["ALL", ...Array.range(1, 12).map(id => `EC${id}`)],
+    B: ["1", "2", "3", "4", "5"],
+    targets: ["singleSelectionInput", "singleTextInput"]
+  },
+  {
     cmd: "STUDIES RESPEC",
     alias: "RESPEC TIME STUDIES"
   }, {

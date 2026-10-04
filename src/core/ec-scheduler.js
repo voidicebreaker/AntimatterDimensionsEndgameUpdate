@@ -14,6 +14,10 @@ export const ECScheduler = {
   get data() { return player.ecScheduler; },
   get isUnlocked() { return PlayerProgress.realityUnlocked(); },
   get isRunning() { return Boolean(this.data?.running); },
+  get automatorOwned() { return this.isRunning && Boolean(this.runtime?.automatorState); },
+  get targetsComplete() {
+    return this.data.enabled.every((on, i) => !on || EternityChallenge(i + 1).completions >= this.data.targets[i]);
+  },
   get totalTT() { return Currency.timeTheorems.value.plus(TimeTheorems.calculateTimeStudiesCost()); },
   get limits() {
     return this.data.mode === "fast"
@@ -69,13 +73,14 @@ export const ECScheduler = {
     this.data.log.splice(12);
   },
 
-  start() {
+  start(automatorState = null) {
+    if (this.automatorOwned) this.pause("EC scheduler restarted from its panel; Automator paused.");
     const reason = this.unavailableReason;
     if (reason) {
       this.log(reason);
       return false;
     }
-    if (!this.data.enabled.some((on, i) => on && EternityChallenge(i + 1).completions < this.data.targets[i])) {
+    if (this.targetsComplete) {
       this.log("All selected targets are complete. Enable an EC or increase its target.");
       return false;
     }
@@ -86,6 +91,7 @@ export const ECScheduler = {
       return false;
     }
     this.newRuntime();
+    this.runtime.automatorState = automatorState;
     this.data.running = true;
     this.data.current = current;
     this.data.phase = current ? "run" : "select";
@@ -94,13 +100,21 @@ export const ECScheduler = {
     return true;
   },
 
-  pause(message = "Paused. Your current studies and challenge are kept.") {
+  pause(message = "Paused. Your current studies and challenge are kept.", completed = false) {
+    const commandState = this.isRunning ? this.runtime?.automatorState : null;
     this.data.running = false;
     this.log(message);
+    if (commandState) {
+      commandState.ecScheduler = completed ? "complete" : "paused";
+      AutomatorData.isWaiting = false;
+      AutomatorData.logCommandEvent(`EC scheduler: ${message}`, commandState.line);
+      if (!completed) AutomatorBackend.pause();
+    }
   },
 
   stop() {
-    this.pause("Stopped. Prestige autobuyers and the Automator have control again.");
+    this.pause(this.automatorOwned ? "EC scheduler stopped. Automator paused on its scheduler command."
+      : "Stopped. Prestige autobuyers and the Automator have control again.");
     this.data.phase = "idle";
     this.data.current = 0;
     this.runtime = null;
@@ -184,7 +198,7 @@ export const ECScheduler = {
     const candidates = EC_ORDER.filter(id => this.data.enabled[id - 1] &&
       EternityChallenge(id).completions < this.data.targets[id - 1]);
     if (!candidates.length) {
-      this.pause("All selected EC targets are complete.");
+      this.pause("All selected EC targets are complete.", true);
       return;
     }
     // An unlocked EC can forbid other Dimension paths even in a virtual tree. Clear it through a paid Eternity
@@ -526,6 +540,12 @@ export const ECScheduler = {
 
   onLoad() {
     this.runtime = null;
+    // GAME_LOAD precedes rebuilding the executable Automator stack; inspect only its persistent state here.
+    for (const entry of player.reality.automator.state.stack) {
+      if (entry.commandState?.ecScheduler !== "running") continue;
+      entry.commandState.ecScheduler = "paused";
+      AutomatorBackend.pause();
+    }
     if (this.isRunning) this.pause("Loaded a saved session. Resume to recheck studies and challenge progress.");
   },
 

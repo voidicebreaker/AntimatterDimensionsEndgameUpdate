@@ -407,8 +407,10 @@ export const AutomatorBackend = {
   },
 
   set mode(value) {
-    if (ECScheduler.isRunning && (value === AUTOMATOR_MODE.RUN || value === AUTOMATOR_MODE.SINGLE_STEP)) {
-      ECScheduler.pause("Automator resumed or stepped. EC scheduler paused.");
+    if (ECScheduler.isRunning && (value === AUTOMATOR_MODE.SINGLE_STEP ||
+        (value === AUTOMATOR_MODE.RUN && !ECScheduler.automatorOwned) ||
+        (value === AUTOMATOR_MODE.PAUSE && ECScheduler.automatorOwned))) {
+      ECScheduler.pause("Automator control changed. EC scheduler paused.");
     }
     this.state.mode = value;
   },
@@ -732,7 +734,7 @@ export const AutomatorBackend = {
         // If single step completes the last line and repeat is off, the command stack will be empty and
         // scrolling will cause an error
         if (stack && this.state.followExecution) AutomatorScroller.scrollToRawLine(stack.lineNumber);
-        this.state.mode = AUTOMATOR_MODE.PAUSE;
+        this.pause();
         return;
       case AUTOMATOR_MODE.RUN:
         break;
@@ -960,6 +962,7 @@ export const AutomatorBackend = {
   },
 
   stop() {
+    if (ECScheduler.automatorOwned) ECScheduler.pause("Automator stopped. EC scheduler paused.");
     this.stack.clear();
     this.state.mode = AUTOMATOR_MODE.PAUSE;
     this.hasJustCompleted = true;
@@ -967,6 +970,7 @@ export const AutomatorBackend = {
   },
 
   pause() {
+    if (ECScheduler.automatorOwned) ECScheduler.pause("Automator paused. EC scheduler paused.");
     this.state.mode = AUTOMATOR_MODE.PAUSE;
   },
 

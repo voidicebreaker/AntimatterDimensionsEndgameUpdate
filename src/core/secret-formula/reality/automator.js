@@ -632,6 +632,45 @@ export const automator = {
         }`
       ]
     },
+    {
+      id: 20,
+      isUnlocked: () => true,
+      keyword: "EC SCHEDULER RUN",
+      category: 1,
+      syntax: `<b>ec scheduler run</b> [fast | balanced]`,
+      description: `Runs the integrated EC scheduler using the selections, targets, and custom routes from its panel.
+        The Automator waits on this line until all selected targets are complete, then continues. Completed targets
+        (or an empty selection) skip immediately. An optional pace changes the saved scheduler pace.
+        Put this command in your repeating Reality script after its initial setup, before Dilation.
+        A timeout, unsupported run, manual intervention, or Stop pauses the script on this line and logs the reason.
+        Resume the Automator to retry from the current state. Pausing or stopping the Automator also pauses
+        its scheduler.
+        Reloaded active sessions remain paused. Single-step stays on this line; use Run to complete the session.
+        Normal Dimension, Tickspeed, Boost, and Galaxy autobuyers must supply progression.`,
+      examples: ["ec scheduler run", "ec scheduler run fast", "ec scheduler run balanced"]
+    },
+    {
+      id: 21,
+      isUnlocked: () => true,
+      keyword: "EC SCHEDULER ON / OFF",
+      category: 2,
+      syntax: `<b>ec scheduler on</b> <u>ecN | all</u><br><b>ec scheduler off</b> <u>ecN | all</u>`,
+      description: `Selects or deselects EC1–12 for future scheduler runs. Does not start the scheduler or change
+        targets.
+        Changes are shared with the scheduler panel and saved across Realities and reloads.`,
+      examples: ["ec scheduler on all", "ec scheduler off ec12", "ec scheduler off all", "ec scheduler on ec2"]
+    },
+    {
+      id: 22,
+      isUnlocked: () => true,
+      keyword: "EC SCHEDULER TARGET",
+      category: 2,
+      syntax: `<b>ec scheduler target</b> <u>ecN | all</u> <u>completions</u>`,
+      description: `Sets a total completion target from 1 to 5 for one EC or all ECs. Does not select disabled ECs or
+        start the scheduler. Targets are minimums; the bulk-completion perk may award more. Settings are shared with
+        the panel and saved. ECs already at their targets are skipped by RUN.`,
+      examples: ["ec scheduler target all 5", "ec scheduler target ec11 1"]
+    },
   ],
   otherAutomatorPoints: [
     {
