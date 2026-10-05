@@ -71,7 +71,7 @@ function findLastPrestigeRecord(layer) {
         ? `${gainedEP}`
         : `${gainedEP}, ${addedECs} completions`;
     case "REALITY":
-      return `${format(player.records.recentRealities[0][1], 2)} RM`;
+      return `${format(player.records.recentRealities[0][2], 2)} RM`;
     case "DOOM":
       return `Dooming your Reality does not give a currency`;
     case "ARMAGEDDON":
