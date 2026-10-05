@@ -64,7 +64,8 @@ const { chromium } = require("playwright-core");
       check(EternityChallenge(2).completions === 1, "Without ECB, a five-tier IP goal claims exactly one tier");
       check(ECScheduler.data.log.some(e => e.message.includes("claimed 1 tier")), "Claim is logged after reward verification");
       check(JSON.stringify(player.overclock) === originalClock, "Scheduler leaves Overclock selections unchanged");
-      check(!EternityChallenge.isRunning, "Claim exits the completed challenge");
+      check(ECScheduler.data.phase === "run" && player.records.thisEternity.maxIP.lt(EternityChallenge(2).currentGoal),
+        "Claim ends the completed run and enters the next tier within the same tick");
       // The game itself changes reset timestamps/settings at Eternity. Pause/Stop must add no changes of their own.
       const afterResetAuto = JSON.stringify(player.auto);
       ECScheduler.pause();
@@ -140,7 +141,6 @@ const { chromium } = require("playwright-core");
       fixture();
       choose(2);
       ECScheduler.start();
-      ECScheduler.tick(50);
       const ec = EternityChallenge(2);
       const originalStart = ec.start;
       ec.start = () => false;
@@ -165,9 +165,32 @@ const { chromium } = require("playwright-core");
       Currency.antimatter.value = new Decimal("1e100000");
       ECScheduler.runtime.crunchTime = 100;
       const beforeAM = Currency.antimatter.value;
-      ECScheduler.crunch();
-      check(Currency.antimatter.value.eq(beforeAM) && EternityChallenge(11).isRunning,
-        "EC11 uses passive IP instead of repeatedly Crunching away its progress");
+      const realGainedIP = window.gainedInfinityPoints;
+      ECScheduler.acting = true;
+      try {
+        window.gainedInfinityPoints = () => EternityChallenge(11).currentGoal.div(10);
+        ECScheduler.crunch();
+        check(Currency.antimatter.value.eq(beforeAM) && EternityChallenge(11).isRunning,
+          "EC11 uses passive IP instead of Crunching away progress that would not reach a tier");
+        window.gainedInfinityPoints = () => EternityChallenge(11).currentGoal;
+        ECScheduler.crunch();
+      } finally {
+        window.gainedInfinityPoints = realGainedIP;
+        ECScheduler.acting = false;
+      }
+      check(EternityChallenge(11).isRunning && EternityChallenge(11).canBeCompleted,
+        "EC11 Crunches as soon as the Crunch itself reaches the next tier");
+
+      fixture();
+      Currency.eternityPoints.value = new Decimal(0);
+      Currency.timeTheorems.value = new Decimal(0);
+      choose(2);
+      ECScheduler.start();
+      ECScheduler.tick(50);
+      check(ECScheduler.data.phase === "farm", "Without the TT for any route, the scheduler farms");
+      Currency.timeTheorems.value = new Decimal(20000);
+      ECScheduler.tick(50);
+      check(EternityChallenge(2).isRunning, "Farming hands back control as soon as a route's TT arrive");
 
       fixture();
       enter(8);
