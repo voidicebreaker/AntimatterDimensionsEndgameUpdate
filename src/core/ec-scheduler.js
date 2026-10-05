@@ -44,7 +44,7 @@ export const ECScheduler = {
     this.runtime = {
       elapsed: 0, phaseTime: 0, stalled: 0, farmTime: 0, cooldowns: {}, failures: {},
       metrics: [], fingerprint: this.fingerprint(), progression: this.progressionKey(),
-      pendingSince: null, lastPending: 0, failurePending: false, plan: null,
+      pendingSince: null, lastPending: 0, failurePending: false, plan: null, retryTT: Infinity, retryAt: Infinity,
       beforeCompletions: 0, crunchTime: 0, farmEternityTime: 0,
       controlledAutobuyers: new Set([Autobuyer.bigCrunch, Autobuyer.eternity, Autobuyer.reality,
         Autobuyer.timeTheorem, Autobuyer.epMult, Autobuyer.replicantiGalaxy,
@@ -174,8 +174,9 @@ export const ECScheduler = {
     if (id >= 11 && studies.some(s => study.config.secondary.forbiddenStudies.includes(s.id))) {
       reason = "This EC needs its dedicated Dimension path.";
     }
-    if (!reason && this.totalTT.lt(cost)) reason = `Needs ${format(cost - this.totalTT.toNumber(), 0, 0)} more TT.`;
-    return { id, studies, cost, reason };
+    const needsTT = !reason && this.totalTT.lt(cost);
+    if (needsTT) reason = `Needs ${format(cost - this.totalTT.toNumber(), 0, 0)} more TT.`;
+    return { id, studies, cost, reason, needsTT };
   },
 
   compatible(plan) {
@@ -221,6 +222,12 @@ export const ECScheduler = {
       a.cost - b.cost || EC_ORDER.indexOf(a.id) - EC_ORDER.indexOf(b.id));
     const plan = plans.find(p => !p.reason && (this.runtime.cooldowns[p.id] || 0) <= this.runtime.elapsed);
     if (!plan) {
+      // Remember what would make a plan attainable, so farming hands back control the moment it is, instead of
+      // after a fixed delay. Early in a fast Reality the TT for the first ECs arrive within a fraction of a second.
+      const cooldown = id => this.runtime.cooldowns[id] || 0;
+      this.runtime.retryTT = Math.min(...plans.filter(p => p.needsTT).map(p => p.cost));
+      this.runtime.retryAt = Math.min(...plans.filter(p => !p.reason || p.needsTT).map(p => cooldown(p.id))
+        .filter(time => time > this.runtime.elapsed));
       this.data.current = 0;
       this.changePhase("farm");
       this.log("Farming EP and Time Theorems; deferred ECs will be checked again.");
@@ -346,11 +353,18 @@ export const ECScheduler = {
 
   crunch() {
     if (!Player.canCrunch) return;
+    const gained = gainedInfinityPoints();
+    const running = EternityChallenge.current;
     // TS181 supplies IP without resetting the growing run. EC11 in particular loses most of its progress to
     // repeated Crunches. EC10 is the exception: it benefits directly from building Infinities.
-    if (TimeStudy(181).isBought && EternityChallenge.isRunning && !EternityChallenge(10).isRunning) return;
-    const gained = gainedInfinityPoints();
-    if (EternityChallenge(4).isRunning) {
+    if (TimeStudy(181).isBought && running && running.id !== 10) {
+      if (running.id === 4) return;
+      // TS181 only yields 1% of the Crunch value per second, so a hard final tier can take minutes to arrive
+      // passively. Crunch exactly when doing so reaches a tier that the run has not already reached.
+      const reached = Math.max(running.completionsAtIP(player.records.thisEternity.maxIP), running.completions);
+      if (reached >= running.maxCompletions || (running.isGoalReached && !Perk.studyECBulk.isBought) ||
+          gained.lt(running.goalAtCompletions(reached))) return;
+    } else if (EternityChallenge(4).isRunning) {
       const ec = EternityChallenge(4);
       const nextInfinities = Currency.infinities.value.plus(gainedInfinities().round());
       if (nextInfinities.gt(ec.config.restriction(ec.completions))) return;
@@ -455,7 +469,10 @@ export const ECScheduler = {
     if (this.runtime.farmTime > this.limits.farm) {
       this.pause("No further EC progress within the farming budget. " +
         "Improve your build or use longer trials, then resume.");
-    } else if (this.runtime.phaseTime >= 2) this.changePhase("select");
+    } else if (this.runtime.phaseTime >= 2 || this.totalTT.gte(this.runtime.retryTT) ||
+        this.runtime.elapsed >= this.runtime.retryAt) {
+      this.changePhase("select");
+    }
   },
 
   clearUnlocked() {
@@ -517,20 +534,25 @@ export const ECScheduler = {
       if (this.data.phase === "run") this.run();
       if (!this.isRunning) return;
       this.buyResources();
-      switch (this.data.phase) {
-        case "select":
-          this.select();
-          break;
-        case "prepare":
-          this.prepare();
-          break;
-        case "farm":
-          this.farm();
-          break;
-        case "respec":
-          this.clearUnlocked();
-          break;
-        default: break;
+      // Phases that need no production in between (claim -> select -> prepare/entry) run within one tick, so each
+      // EC costs about one game tick instead of three. The step bound prevents ping-ponging within a tick.
+      for (let step = 0, phase = ""; step < 4 && this.isRunning && phase !== this.data.phase; step++) {
+        phase = this.data.phase;
+        switch (phase) {
+          case "select":
+            this.select();
+            break;
+          case "prepare":
+            this.prepare();
+            break;
+          case "farm":
+            this.farm();
+            break;
+          case "respec":
+            this.clearUnlocked();
+            break;
+          default: break;
+        }
       }
     } finally {
       this.acting = false;
