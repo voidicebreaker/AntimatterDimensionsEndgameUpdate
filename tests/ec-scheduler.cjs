@@ -64,8 +64,9 @@ const { chromium } = require("playwright-core");
       check(EternityChallenge(2).completions === 1, "Without ECB, a five-tier IP goal claims exactly one tier");
       check(ECScheduler.data.log.some(e => e.message.includes("claimed 1 tier")), "Claim is logged after reward verification");
       check(JSON.stringify(player.overclock) === originalClock, "Scheduler leaves Overclock selections unchanged");
-      check(ECScheduler.data.phase === "run" && player.records.thisEternity.maxIP.lt(EternityChallenge(2).currentGoal),
-        "Claim ends the completed run and enters the next tier within the same tick");
+      check(EternityChallenge(2).isRunning && ECScheduler.runtime.beforeCompletions === 1 &&
+        player.records.thisEternity.maxIP.lt(EternityChallenge(2).currentGoal),
+      "Claim exits the old run and immediately starts the next tier with reset resources");
       // The game itself changes reset timestamps/settings at Eternity. Pause/Stop must add no changes of their own.
       const afterResetAuto = JSON.stringify(player.auto);
       ECScheduler.pause();
@@ -147,6 +148,52 @@ const { chromium } = require("playwright-core");
       try { ECScheduler.tick(50); } finally { ec.start = originalStart; }
       check(!ec.isRunning && ec.completions === 0 && ECScheduler.runtime.cooldowns[2] > 0,
         "A refused challenge start is deferred without a false completion");
+
+      fixture({ tt: 0 });
+      Currency.eternityPoints.reset();
+      choose(2);
+      ECScheduler.start();
+      ECScheduler.tick(1);
+      check(ECScheduler.data.phase === "farm" && ECScheduler.data.status.includes("Waiting for TT for EC2"),
+        "A TT shortage identifies the next challenge and its actual route budget");
+      const routeCost = ECScheduler.plan(2).cost;
+      check(ECScheduler.data.status.includes(format(routeCost)), "TT diagnostics show the required amount");
+      Currency.timeTheorems.value = new Decimal(routeCost);
+      ECScheduler.tick(1);
+      check(EternityChallenge(2).isRunning && ECScheduler.runtime.elapsed < 0.01,
+        "Crossing the TT threshold starts the challenge next tick without a two-second farming wait");
+      check(EternityChallenge(2).completions === 0, "Fast preparation still requires actual challenge production");
+      check(ECScheduler.diagnostics.some(s => s.includes("ECB not unlocked")) &&
+        ECScheduler.diagnostics.some(s => s.includes("route and unlock cost")),
+      "Diagnostics distinguish a missing bulk perk from the route's TT requirement");
+
+      fixture();
+      choose(10);
+      ECScheduler.start();
+      ECScheduler.tick(1);
+      check(ECScheduler.data.phase === "farm" && ECScheduler.data.status.includes("prerequisites"),
+        "A structural prerequisite is reported separately from a TT shortage");
+      for (const id of [1, 2, 3]) EternityChallenge(id).completions = 1;
+      ECScheduler.tick(1);
+      check(ECScheduler.data.current === 10 && ECScheduler.data.phase === "prepare",
+        "New challenge completions immediately invalidate a blocked farming plan");
+
+      fixture({ bulk: true });
+      enter(2);
+      Currency.infinityPoints.value = EternityChallenge(2).currentGoal;
+      ECScheduler.tick(2.5, 250);
+      check(EternityChallenge(2).completions === 0, "Bulk collection first allows the next tier to grow");
+      ECScheduler.tick(2.5, 1500);
+      check(EternityChallenge(2).completions === 1 && ECScheduler.runtime.elapsed < 0.1,
+        "Bulk waiting follows accelerated time while the watchdog counts unaccelerated time");
+
+      fixture({ bulk: true });
+      enter(2);
+      Currency.infinityPoints.value = EternityChallenge(2).currentGoal;
+      ECScheduler.tick(2.5, 2.5);
+      ECScheduler.tick(2.5, 2.5);
+      check(EternityChallenge(2).completions === 0,
+        "Without acceleration a weaker build keeps its normal bulk growth window");
 
       fixture();
       enter(4);
@@ -299,6 +346,10 @@ const { chromium } = require("playwright-core");
     await page.getByRole("button", { name: "Pause", exact: true }).click();
     assert.equal(await page.evaluate(() => ECScheduler.isRunning), false);
     checks.push("Visible Start and Pause controls work");
+    const diagnostics = await page.locator('[aria-label="Scheduler diagnostics"]').textContent();
+    assert.match(diagnostics, /Time Theorems:.*unspent;.*total/s);
+    assert.match(diagnostics, /ECB not unlocked/);
+    checks.push("Visible diagnostics show TT balances and whether bulk completion is unlocked");
     await page.evaluate(() => {
       const old = GameSaveSerializer.deserialize(GameSaveSerializer.serialize(player));
       delete old.ecScheduler;

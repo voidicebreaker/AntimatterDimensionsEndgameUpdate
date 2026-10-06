@@ -42,10 +42,11 @@ export const ECScheduler = {
 
   newRuntime() {
     this.runtime = {
-      elapsed: 0, phaseTime: 0, stalled: 0, farmTime: 0, cooldowns: {}, failures: {},
+      elapsed: 0, actionElapsed: 0, phaseTime: 0, stalled: 0, farmTime: 0, cooldowns: {}, failures: {},
       metrics: [], fingerprint: this.fingerprint(), progression: this.progressionKey(),
-      pendingSince: null, lastPending: 0, failurePending: false, plan: null, retryTT: Infinity, retryAt: Infinity,
-      beforeCompletions: 0, crunchTime: 0, farmEternityTime: 0,
+      pendingSince: null, lastPending: 0, failurePending: false, plan: null,
+      beforeCompletions: 0, crunchTime: 0, farmEternityTime: 0, farmPlans: null,
+      initialCompletions: EternityChallenges.completions,
       controlledAutobuyers: new Set([Autobuyer.bigCrunch, Autobuyer.eternity, Autobuyer.reality,
         Autobuyer.timeTheorem, Autobuyer.epMult, Autobuyer.replicantiGalaxy,
         ...Autobuyer.infinityDimension.zeroIndexed, ...Autobuyer.timeDimension.zeroIndexed,
@@ -102,6 +103,9 @@ export const ECScheduler = {
 
   pause(message = "Paused. Your current studies and challenge are kept.", completed = false) {
     const commandState = this.isRunning ? this.runtime?.automatorState : null;
+    if (this.runtime) {
+      this.runtime.completedTiers = Math.max(0, EternityChallenges.completions - this.runtime.initialCompletions);
+    }
     this.data.running = false;
     this.log(message);
     if (commandState) {
@@ -127,12 +131,14 @@ export const ECScheduler = {
 
   setEnabled(id, enabled) {
     this.data.enabled.splice(id - 1, 1, Boolean(enabled));
+    if (this.runtime) this.runtime.farmPlans = null;
     if (!enabled && this.isRunning && this.data.current === id) this.pause(`EC${id} disabled. Current run kept.`);
   },
 
   setTarget(id, value) {
     const target = Math.max(1, Math.min(5, Math.floor(Number(value) || 1)));
     this.data.targets.splice(id - 1, 1, target);
+    if (this.runtime) this.runtime.farmPlans = null;
   },
 
   setTree(id, value) {
@@ -174,9 +180,11 @@ export const ECScheduler = {
     if (id >= 11 && studies.some(s => study.config.secondary.forbiddenStudies.includes(s.id))) {
       reason = "This EC needs its dedicated Dimension path.";
     }
-    const needsTT = !reason && this.totalTT.lt(cost);
-    if (needsTT) reason = `Needs ${format(cost - this.totalTT.toNumber(), 0, 0)} more TT.`;
-    return { id, studies, cost, reason, needsTT };
+    const structuralReason = reason;
+    if (!reason && this.totalTT.lt(cost)) {
+      reason = `Needs ${format(new Decimal(cost).minus(this.totalTT), 0, 0)} more TT.`;
+    }
+    return { id, studies, cost, reason, structuralReason };
   },
 
   compatible(plan) {
@@ -222,15 +230,10 @@ export const ECScheduler = {
       a.cost - b.cost || EC_ORDER.indexOf(a.id) - EC_ORDER.indexOf(b.id));
     const plan = plans.find(p => !p.reason && (this.runtime.cooldowns[p.id] || 0) <= this.runtime.elapsed);
     if (!plan) {
-      // Remember what would make a plan attainable, so farming hands back control the moment it is, instead of
-      // after a fixed delay. Early in a fast Reality the TT for the first ECs arrive within a fraction of a second.
-      const cooldown = id => this.runtime.cooldowns[id] || 0;
-      this.runtime.retryTT = Math.min(...plans.filter(p => p.needsTT).map(p => p.cost));
-      this.runtime.retryAt = Math.min(...plans.filter(p => !p.reason || p.needsTT).map(p => cooldown(p.id))
-        .filter(time => time > this.runtime.elapsed));
       this.data.current = 0;
+      this.runtime.farmPlans = plans;
       this.changePhase("farm");
-      this.log("Farming EP and Time Theorems; deferred ECs will be checked again.");
+      this.log(this.farmStatus);
       return;
     }
     this.runtime.plan = plan;
@@ -281,12 +284,15 @@ export const ECScheduler = {
           return;
         }
         const requirement = ecStudy.config.secondary.resource?.() || "study path";
-        this.data.status = `EC${plan.id}: building its entry requirement (${requirement}).`;
+        this.data.status = `EC${plan.id}: building ${requirement} ` +
+          `(${format(ecStudy.requirementCurrent)} / ${format(ecStudy.requirementTotal)}).`;
         this.crunch();
         // EC1 specifically requires repeated Eternities. Other entry requirements need the current run to grow.
         if (plan.id === 1 && Player.canEternity) eternity(false, true);
       } else {
-        this.data.status = `EC${plan.id}: waiting for its required Time Studies.`;
+        const missing = plan.studies.find(s => !s.isBought);
+        this.data.status = `EC${plan.id}: waiting for Study ${missing.id} ` +
+          `(${format(Currency.timeTheorems.value)} unspent TT; costs ${format(missing.cost)} TT).`;
       }
     } else {
       this.data.status = `Preparing EC${plan.id}: waiting for an Eternity to respec the current tree.`;
@@ -428,18 +434,22 @@ export const ECScheduler = {
     if (pending.gainedCompletions > 0) {
       if (pending.totalCompletions !== this.runtime.lastPending) {
         this.runtime.lastPending = pending.totalCompletions;
-        this.runtime.pendingSince = this.runtime.elapsed;
+        this.runtime.pendingSince = this.runtime.actionElapsed;
       }
       const enough = pending.totalCompletions >= this.data.targets[id - 1];
       // Restriction challenges are claimed immediately; their next production tick can invalidate a tier.
       if (!Perk.studyECBulk.isBought || enough || id === 4 || id === 12 ||
-          this.runtime.elapsed - this.runtime.pendingSince >= this.limits.bulk) {
+          this.runtime.actionElapsed - this.runtime.pendingSince >= this.limits.bulk) {
         this.claim();
         return;
       }
     }
     this.data.status = `EC${id}: ${ec.completions}/5 complete; ${pending.gainedCompletions} ready to claim. ` +
       `IP ${format(player.records.thisEternity.maxIP)} / ${format(ec.currentGoal)}.`;
+    if (pending.gainedCompletions > 0) {
+      const remaining = Math.max(0, this.limits.bulk - (this.runtime.actionElapsed - this.runtime.pendingSince));
+      this.data.status += ` Bulk window: ${format(remaining, 2, 2)} Overclock-adjusted seconds left.`;
+    }
     if (this.runtime.stalled > this.limits.stall || this.runtime.phaseTime > this.limits.trial) {
       if (pending.gainedCompletions > 0) this.claim();
       else this.defer("No completion within the trial budget. Farming before retrying.");
@@ -458,7 +468,62 @@ export const ECScheduler = {
     this.changePhase("select");
   },
 
+  get farmStatus() {
+    const plans = this.runtime?.farmPlans || [];
+    const available = plans.filter(p => !p.structuralReason &&
+      (this.runtime.cooldowns[p.id] || 0) <= this.runtime.elapsed).sort((a, b) => a.cost - b.cost);
+    if (available.length) {
+      const plan = available[0];
+      return `Waiting for TT for EC${plan.id}: ${format(this.totalTT)} / ${format(plan.cost)} total TT ` +
+        `(including purchased studies).`;
+    }
+    const retry = plans.filter(p => !p.structuralReason)
+      .sort((a, b) => this.runtime.cooldowns[a.id] - this.runtime.cooldowns[b.id])[0];
+    if (retry) {
+      const remaining = Math.max(0, this.runtime.cooldowns[retry.id] - this.runtime.elapsed);
+      return `Farming before retrying EC${retry.id}: ${format(remaining, 1, 1)} active seconds left. ` +
+        `${this.data.notes[retry.id - 1]}`;
+    }
+    const plan = plans[0];
+    return plan
+      ? `Waiting for EC${plan.id} prerequisites: ${plan.structuralReason}` : "Rechecking selected EC targets.";
+  },
+
+  get diagnostics() {
+    if (!this.runtime) return [];
+    const phases = { select: "Selecting a challenge", prepare: "Buying studies / meeting entry requirements",
+      run: "Inside a challenge", farm: "Farming prerequisites", respec: "Releasing the previous study tree" };
+    const lines = [
+      `${this.isRunning ? phases[this.data.phase] : "Session stopped"}. ` +
+        `${this.isRunning ? Math.max(0, EternityChallenges.completions - this.runtime.initialCompletions)
+          : this.runtime.completedTiers || 0} tiers completed in ` +
+        `${format(this.runtime.elapsed, 2, 2)} active seconds.`,
+      `Time Theorems: ${format(Currency.timeTheorems.value)} unspent; ${format(this.totalTT)} total.`,
+      Perk.studyECBulk.isBought ? "ECB unlocked: all reachable tiers can be claimed in one Eternity."
+        : "ECB not unlocked: each tier requires its own challenge run and Eternity."
+    ];
+    if (this.data.current && this.runtime.plan) {
+      lines.push(`EC${this.data.current} route and unlock cost: ${format(this.runtime.plan.cost)} TT. ` +
+        "Optional extra studies do not block entry.");
+    }
+    return lines;
+  },
+
   farm() {
+    if (this.runtime.farmTime > this.limits.farm) {
+      this.pause("No further EC progress within the farming budget. " +
+        "Improve your build or use longer trials, then resume.");
+      return;
+    }
+    // Recheck as soon as a route is affordable or a cooldown expires. The two-second polling interval must not
+    // impose a real-time delay on a build which earned its TT in a single Overclock subtick.
+    const plans = this.runtime.farmPlans;
+    if (!plans || plans.some(p => !p.structuralReason && this.totalTT.gte(p.cost) &&
+        (this.runtime.cooldowns[p.id] || 0) <= this.runtime.elapsed)) {
+      this.changePhase("select");
+      return;
+    }
+    this.data.status = this.farmStatus;
     this.buyStudyExtras(0);
     this.crunch();
     if (Player.canEternity && (gainedEternityPoints().gte(Currency.eternityPoints.value.max(1)) ||
@@ -466,13 +531,7 @@ export const ECScheduler = {
       eternity(false, true);
       this.runtime.farmEternityTime = 0;
     }
-    if (this.runtime.farmTime > this.limits.farm) {
-      this.pause("No further EC progress within the farming budget. " +
-        "Improve your build or use longer trials, then resume.");
-    } else if (this.runtime.phaseTime >= 2 || this.totalTT.gte(this.runtime.retryTT) ||
-        this.runtime.elapsed >= this.runtime.retryAt) {
-      this.changePhase("select");
-    }
+    if (this.runtime.phaseTime >= 2) this.changePhase("select");
   },
 
   clearUnlocked() {
@@ -499,7 +558,7 @@ export const ECScheduler = {
     this.runtime.metrics = metrics.map((v, i) => Math.max(v, this.runtime.metrics[i] ?? v));
   },
 
-  tick(elapsedMs) {
+  tick(elapsedMs, actionMs = elapsedMs) {
     if (!this.isRunning) return;
     if (!this.runtime) {
       this.pause("Loaded a saved session. Resume to recheck the current run.");
@@ -515,17 +574,20 @@ export const ECScheduler = {
       return;
     }
     const seconds = Math.max(0, Math.min(Number(elapsedMs) || 0, 250)) / 1000;
+    const actionSeconds = Number.isFinite(actionMs) ? Math.max(0, actionMs) / 1000 : 0;
     this.runtime.elapsed += seconds;
+    this.runtime.actionElapsed += actionSeconds;
     this.runtime.phaseTime += seconds;
     this.runtime.farmTime += seconds;
-    this.runtime.crunchTime += seconds;
-    this.runtime.farmEternityTime += seconds;
+    this.runtime.crunchTime += actionSeconds;
+    this.runtime.farmEternityTime += actionSeconds;
     const key = this.progressionKey();
     if (key !== this.runtime.progression) {
       this.runtime.progression = key;
       this.runtime.cooldowns = {};
       this.runtime.failures = {};
       this.runtime.farmTime = 0;
+      this.runtime.farmPlans = null;
     }
     this.updateProgress(seconds);
     this.acting = true;
@@ -534,10 +596,10 @@ export const ECScheduler = {
       if (this.data.phase === "run") this.run();
       if (!this.isRunning) return;
       this.buyResources();
-      // Phases that need no production in between (claim -> select -> prepare/entry) run within one tick, so each
-      // EC costs about one game tick instead of three. The step bound prevents ping-ponging within a tick.
-      for (let step = 0, phase = ""; step < 4 && this.isRunning && phase !== this.data.phase; step++) {
-        phase = this.data.phase;
+      // Selection, study purchases and verified entry need no intervening production frame. Continue through
+      // ready phases, stopping at a real resource requirement; bound the work even with malformed custom routes.
+      for (let step = 0; step < 8 && this.isRunning; step++) {
+        const phase = this.data.phase;
         switch (phase) {
           case "select":
             this.select();
@@ -551,7 +613,13 @@ export const ECScheduler = {
           case "respec":
             this.clearUnlocked();
             break;
-          default: break;
+          default: return;
+        }
+        if (this.data.phase === phase) break;
+        if (this.data.phase === "run") {
+          // Challenge entry resets Dimensions. Supply its initial purchases now instead of losing a full tick.
+          this.buyResources();
+          break;
         }
       }
     } finally {

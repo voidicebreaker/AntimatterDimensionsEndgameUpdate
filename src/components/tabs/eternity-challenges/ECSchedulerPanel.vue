@@ -10,6 +10,7 @@ export default {
       current: 0,
       rows: [],
       log: [],
+      diagnostics: [],
       ec8Chance: 9,
       ec8Interval: 10,
       blocked: ""
@@ -36,6 +37,7 @@ export default {
         tree: data.trees[ec.id - 1]
       }));
       this.log = [...data.log];
+      this.diagnostics = ECScheduler.diagnostics;
     },
     start() {
       ECScheduler.start();
@@ -121,6 +123,17 @@ export default {
     <p v-if="blocked">
       {{ blocked }}
     </p>
+    <div
+      v-if="diagnostics.length"
+      aria-label="Scheduler diagnostics"
+    >
+      <p
+        v-for="line in diagnostics"
+        :key="line"
+      >
+        {{ line }}
+      </p>
+    </div>
     <p class="c-ec-scheduler__hint">
       Handles study purchases, respecs, and Eternities. While running, the Automator and prestige autobuyers
       yield control. Pause or Stop releases them and keeps your current challenge.

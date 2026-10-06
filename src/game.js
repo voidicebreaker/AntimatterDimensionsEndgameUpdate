@@ -1435,7 +1435,7 @@ export function gameLoop(passedDiff, options = {}) {
   AutomatorBackend.update(realDiff);
   // Watchdogs use unaccelerated active time. Cap coarse offline ticks inside the scheduler.
   ECScheduler.tick(options.overclocked || passedDiff === undefined
-    ? unscaledRealDiff : realDiff / Math.max(Overclock.timeFlow, 1));
+    ? unscaledRealDiff : realDiff / Math.max(Overclock.timeFlow, 1), realDiff);
   Pelle.gameLoop(realDiff);
   GalaxyGenerator.loop(realDiff);
   // The ending sequence is a cutscene, so it ignores Overclock
