@@ -32,6 +32,7 @@ import EtherealTab from "./ethereal/EtherealTab";
 import ExpansionPacksTab from "./endgame/ExpansionPacksTab";
 import GalacticPowerTab from "./galactic-power/GalacticPowerTab";
 import GlyphSetRecordsTab from "./glyph-set-records/GlyphSetRecordsTab";
+import GlyphSolverTab from "./glyph-solver/GlyphSolverTab";
 import GlyphsTab from "./glyphs/GlyphsTab";
 import HypercubesTab from "./hypercubes/HypercubesTab";
 import ImaginaryUpgradesTab from "./imaginary-upgrades/ImaginaryUpgradesTab";
@@ -84,6 +85,7 @@ const TabComponents = {
   ChallengeRecordsTab,
   PastPrestigeRunsTab,
   GlyphSetRecordsTab,
+  GlyphSolverTab,
   SpeedrunMilestonesTab,
   PreviousSpeedrunTab,
   StoredTimeTab,

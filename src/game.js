@@ -1899,6 +1899,28 @@ function afterSimulation(seconds, playerBefore) {
   GameUI.notify.showBlackHoles = true;
 }
 
+// Returns a function which simulates one tick, given how many ticks remain (including this one). Each call splits the
+// remaining real time evenly among the remaining ticks, so the tick count may shrink partway through ("Speed up").
+// Black Hole cycles are accounted for by splitting intervals on real time instead, keeping ticks roughly equal in game
+// time. Black hole auto-pausing is handled by the phase advancement code and calculateOfflineTick.
+export function createSimulationStepper(seconds) {
+  let remainingRealSeconds = seconds;
+  if (BlackHoles.areUnlocked && !BlackHoles.arePaused) {
+    return i => {
+      const [realTickTime, blackHoleSpeedup] = BlackHoles.calculateOfflineTick(remainingRealSeconds,
+        i, 0.0001);
+      remainingRealSeconds -= realTickTime;
+      if (realTickTime <= 0) throw Error("The game tries to simulate " + realTickTime + " seconds and this will cause game to randomly crash.");
+      else gameLoop(1000 * realTickTime, { blackHoleSpeedup });
+    };
+  }
+  return i => {
+    const diff = remainingRealSeconds / i;
+    gameLoop(1000 * diff);
+    remainingRealSeconds -= diff;
+  };
+}
+
 export function simulateTime(seconds, real, fast) {
   // The game is simulated at a base 50ms update rate, with a maximum tick count based on the values of real and fast
   // - Calling with real === true will always simulate at full accuracy with no tick count reduction unless it would
@@ -1945,37 +1967,8 @@ export function simulateTime(seconds, real, fast) {
 
   EventHub.dispatch(GAME_EVENT.OFFLINE_CURRENCY_GAINED);
 
-  let remainingRealSeconds = seconds;
-  if (remainingRealSeconds <= 0) return;
-  // During async code the number of ticks remaining can go down suddenly
-  // from "Speed up" which means tick length needs to go up, and thus
-  // you can't just divide total time by total ticks to get tick length.
-  // For example, suppose you had 6000 offline ticks, and called "Speed up"
-  // 1000 ticks in, meaning that after "Speed up" there'd only be 1000 ticks more
-  // (so 1000 + 1000 = 2000 ticks total). Dividing total time by total ticks would
-  // use 1/6th of the total time before "Speed up" (1000 of 6000 ticks), and 1/2 after
-  // (1000 of 2000 ticks). Short of some sort of magic user prediction to figure out
-  // whether the user *will* press "Speed up" at some point, dividing remaining time
-  // by remaining ticks seems like the best thing to do.
-  let loopFn = i => {
-    const diff = remainingRealSeconds / i;
-    gameLoop(1000 * diff);
-    remainingRealSeconds -= diff;
-  };
-
-  // Simulation code which accounts for BH cycles (segments where a BH is active doesn't use diff since it splits
-  // up intervals based on real time instead in an effort to keep ticks all roughly equal in game time).
-  // Black hole auto-pausing is entirely handled by the black hole phase advancement code (for actually pausing)
-  // and calculateOfflineTick (for time calculation).
-  if (BlackHoles.areUnlocked && !BlackHoles.arePaused) {
-    loopFn = i => {
-      const [realTickTime, blackHoleSpeedup] = BlackHoles.calculateOfflineTick(remainingRealSeconds,
-        i, 0.0001);
-      remainingRealSeconds -= realTickTime;
-      if (realTickTime <= 0) throw Error("The game tries to simulate " + realTickTime + " seconds and this will cause game to randomly crash.");
-      else gameLoop(1000 * realTickTime, { blackHoleSpeedup });
-    };
-  }
+  if (seconds <= 0) return;
+  const loopFn = createSimulationStepper(seconds);
 
   // We don't show the offline modal here or bother with async if doing a fast simulation
   if (fast) {

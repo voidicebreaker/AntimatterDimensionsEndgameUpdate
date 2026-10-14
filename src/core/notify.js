@@ -4,6 +4,8 @@ export const notify = (function() {
   const enterAnimation = "a-notification--enter";
   const leaveAnimation = "a-notification--leave";
   function showNotification(text, elClass, duration = 2000) {
+    // Glyph Solver trials run the real game loop; their prestiges and achievements must not reach the player
+    if (GlyphSolver.isSimulating) return;
     if (!GameUI.initialized) {
       setTimeout(showNotification, 500, text, elClass, duration);
       return;

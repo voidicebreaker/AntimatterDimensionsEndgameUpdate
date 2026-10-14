@@ -440,6 +440,15 @@ export const tabs = [
         id: 6,
         hidable: true,
       },
+      {
+        key: "glyph_solver",
+        name: "Glyph Solver",
+        symbol: "<i class='fas fa-calculator'></i>",
+        component: "GlyphSolverTab",
+        condition: () => PlayerProgress.endgameUnlocked() || PlayerProgress.realityUnlocked(),
+        id: 7,
+        hidable: true,
+      },
     ],
   },
   {

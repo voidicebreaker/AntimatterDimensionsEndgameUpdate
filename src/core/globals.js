@@ -107,6 +107,7 @@ export * from "./dilation";
 export * from "./compression";
 export * from "./black-hole";
 export * from "./black-hole-pulse-optimizer";
+export * from "./glyph-solver";
 export * from "./machines";
 export * from "./break-eternity-upgrades";
 export * from "./devtools";
