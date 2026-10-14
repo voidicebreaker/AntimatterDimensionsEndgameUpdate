@@ -6,8 +6,6 @@ const SOLVER_TYPES = ["power", "infinity", "replication", "time", "dilation", "e
 const TYPE_LETTERS = {
   power: "P", infinity: "I", replication: "R", time: "T", dilation: "D", effarig: "E", reality: "Y"
 };
-// Stop simulating for a frame after this many milliseconds so the progress display updates and Cancel works
-const CHUNK_MS = 100;
 
 const decimalMetric = (key, name, getter) => ({ key, name, value: getter, lowerIsBetter: false });
 const timeMetric = (key, name) => ({ key, name, value: run => run.milestones[key], lowerIsBetter: true, isTime: true });
@@ -59,12 +57,10 @@ export function compareGlyphSolverMetric(metric, a, b) {
   return Decimal.compare(a, b);
 }
 
-const yieldFrame = () => new Promise(resolve => setTimeout(resolve, 0));
 const glyphPower = glyph => new Decimal(glyph.level).times(glyph.strength);
 const sameGlyph = (a, b) => new Decimal(a.level).eq(b.level) && a.strength === b.strength && a.effects === b.effects;
 
 export const GlyphSolver = {
-  isSimulating: false,
   // Stand-in Effarig and Reality glyphs created by the pool, which have to be made real before equipping
   synthesized: new WeakSet(),
   settings: {
@@ -261,19 +257,8 @@ export const GlyphSolver = {
     EventHub.dispatch(GAME_EVENT.GLYPHS_CHANGED);
   },
 
-  restoreSave(saveString, simulateOffline) {
-    GameStorage.offlineEnabled = simulateOffline ? undefined : false;
-    GameStorage.loadPlayerObject(GameSaveSerializer.deserialize(saveString));
-    GameStorage.offlineEnabled = undefined;
-    Enslaved.autoReleaseTick = 0;
-    Quote.clearAll();
-    // The offline progress summary for the restored save is worth showing; anything else came from a trial
-    if (!simulateOffline) Modal.hideAll();
-  },
-
   async runTrial(base, counts, { seconds, realSeconds, ticks }) {
-    this.restoreSave(base, false);
-    GameIntervals.stop();
+    SolverHarness.restoreTrial(base);
     this.equipLoadout(counts);
     player.reality.respec = false;
 
@@ -287,19 +272,15 @@ export const GlyphSolver = {
     EventHub.logic.on(GAME_EVENT.ETERNITY_RESET_AFTER, mark("firstEternity"), this);
     EventHub.logic.on(GAME_EVENT.REALITY_RESET_AFTER, mark("firstReality"), this);
     try {
-      const step = createSimulationStepper(seconds);
-      let left = ticks;
-      while (left > 0) {
-        const chunkStart = Date.now();
-        while (left > 0 && Date.now() - chunkStart < CHUNK_MS) {
-          step(left);
-          left--;
-          elapsed = realSeconds * (ticks - left) / ticks;
-        }
-        Modal.hideAll();
-        await yieldFrame();
-        if (this.status.cancelRequested) return null;
-      }
+      const outcome = await SolverHarness.runTicks({
+        seconds,
+        ticks,
+        onStep: fraction => {
+          elapsed = realSeconds * fraction;
+        },
+        isCancelled: () => this.status.cancelRequested,
+      });
+      if (outcome === "cancelled") return null;
       const values = {};
       for (const metric of GLYPH_SOLVER_METRICS) values[metric.key] = readMetric(metric, run);
       return values;
@@ -314,7 +295,7 @@ export const GlyphSolver = {
   },
 
   async solve() {
-    if (this.status.running || this.unavailableReason) return;
+    if (this.status.running || SolverHarness.isBusy || this.unavailableReason) return;
     const settings = { ...this.settings, excluded: [...this.settings.excluded] };
     const pool = this.pool;
     const loadouts = this.loadouts(pool);
@@ -322,14 +303,12 @@ export const GlyphSolver = {
     const refineCount = Math.min(settings.refineTicks > settings.screenTicks ? settings.refineCount : 0,
       loadouts.length);
 
-    const original = GameSaveSerializer.serialize(player);
-    const openTab = { tab: ui.view.tab, subtab: ui.view.subtab };
+    const session = SolverHarness.begin("glyphs");
+    if (!session) return;
     Object.assign(this.status, {
       running: true, cancelRequested: false, phase: "Preparing", done: 0,
       total: loadouts.length + refineCount, startedAt: Date.now(), error: "",
     });
-    GameIntervals.stop();
-    this.isSimulating = true;
     let results = [];
     try {
       if (this.needsRestart && !this.restartWithoutGlyphs()) {
@@ -363,21 +342,8 @@ export const GlyphSolver = {
       // eslint-disable-next-line no-console
       console.error(error);
     } finally {
-      try {
-        this.isSimulating = false;
-        // Trials can switch tabs on prestige; go back before restoring so the offline summary is not closed
-        if (ui.view.tab !== openTab.tab || ui.view.subtab !== openTab.subtab) {
-          Tab[openTab.tab]?.subtabs.find(t => t.key === openTab.subtab)?.show(true);
-        }
-        // Real time kept passing while we solved; let normal offline progress catch the restored save up
-        this.restoreSave(original, true);
-      } catch (error) {
-        // Never let a half-simulated state be autosaved over the real one
-        this.isSimulating = true;
-        this.status.error = `Could not restore your save (${error.message}). Reload the page; nothing was saved.`;
-        // eslint-disable-next-line no-console
-        console.error(error);
-      }
+      const restoreError = SolverHarness.end(session);
+      if (restoreError) this.status.error = restoreError;
       results = this.rank(results);
       // Frozen so the UI does not make hundreds of result objects reactive
       this.status.lastRun = Object.freeze({
@@ -399,7 +365,7 @@ export const GlyphSolver = {
 
   // Equips a solved loadout for real, restarting the Reality first if any glyph is already equipped
   apply(counts) {
-    if (this.status.running || this.unavailableReason) return false;
+    if (this.status.running || SolverHarness.isBusy || this.unavailableReason) return false;
     if (player.reality.glyphs.active.some(g => g.type !== "companion") && !this.restartWithoutGlyphs()) {
       GameUI.notify.error("No inventory space to unequip your current Glyphs.");
       return false;

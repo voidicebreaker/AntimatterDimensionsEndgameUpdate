@@ -19,6 +19,7 @@ import DivineDimensionsTab from "./divine-dimensions/DivineDimensionsTab";
 import DivinityMilestonesTab from "./divinity-milestones/DivinityMilestonesTab";
 import DivinityUpgradesTab from "./divinity-upgrades/DivinityUpgradesTab";
 import DualityUpgradesTab from "./duality-upgrades/DualityUpgradesTab";
+import ECSolverTab from "./ec-solver/ECSolverTab";
 import EffarigTab from "./celestial-effarig/EffarigTab";
 import EndgameTab from "./endgame/EndgameTab";
 import EndgameMasteriesTab from "./endgame-masteries/EndgameMasteriesTab";
@@ -92,6 +93,7 @@ const TabComponents = {
   NormalAchievementsTab,
   SecretAchievementTab,
   TeresaTab,
+  ECSolverTab,
   EffarigTab,
   EnslavedTab,
   VTab,

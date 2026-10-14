@@ -97,7 +97,7 @@ const { chromium } = require("playwright-core");
       check(run.results.slice(0, 2).every(r => r.ticks === 8), "The top results were re-run at refine accuracy");
       const restored = sameSave(before, GameSaveSerializer.serialize(player));
       check(restored.same, `The save is restored exactly after solving ${restored.paths}`);
-      check(!GlyphSolver.isSimulating && GameStorage.canSave(), "Saving is allowed again after solving");
+      check(!SolverHarness.isSimulating && GameStorage.canSave(), "Saving is allowed again after solving");
       const top = run.results[0];
       const replication = run.results.find(r => r.name === "RRR");
       check(Decimal.gt(top.values.antimatter, replication.values.antimatter),

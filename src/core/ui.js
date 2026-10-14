@@ -147,9 +147,9 @@ export const GameUI = {
   },
   flushEvents() {
     this.flushPromise = undefined;
-    // Glyph Solver trials run the real game on a throwaway copy; re-rendering the whole UI for them only slows the
-    // solver down, so its tab polls for progress on its own instead
-    if (GlyphSolver.isSimulating) {
+    // Solver trials run the real game on a throwaway copy; re-rendering the whole UI for them only slows the
+    // solver down, so solver tabs poll for progress on their own instead
+    if (SolverHarness.isSimulating) {
       this.events = [];
       return;
     }

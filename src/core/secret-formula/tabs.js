@@ -269,6 +269,15 @@ export const tabs = [
           EternityChallenges.all.some(ec => ec.completions > 0),
         id: 2,
         hidable: true
+      },
+      {
+        key: "ec_solver",
+        name: "EC Solver",
+        symbol: "<i class='fas fa-calculator'></i>",
+        component: "ECSolverTab",
+        condition: () => PlayerProgress.endgameUnlocked() || PlayerProgress.realityUnlocked(),
+        id: 3,
+        hidable: true
       }
     ],
   },

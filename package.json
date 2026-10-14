@@ -9,6 +9,7 @@
     "lint": "vue-cli-service lint",
     "test:ec-scheduler": "node tests/ec-scheduler.cjs && node tests/ec-scheduler-automator.cjs",
     "test:glyph-solver": "node tests/glyph-solver.cjs",
+    "test:ec-solver": "node tests/ec-solver.cjs",
     "test:ra-pulse": "node tests/ra-overclock-pulse.cjs",
     "test:ra-scaling": "node tests/ra-scaling.cjs"
   },
