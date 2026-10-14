@@ -375,6 +375,30 @@ export const overclockUpgrades = [
       `Shared prestige gain bonus ${formatX(scaleOverclockMultiplier(5), 1, 1)}, stacking with Interest upgrades`,
     effect: 5,
   },
+  {
+    id: 29,
+    name: "Chunk Accelerator",
+    kind: "ra-chunks",
+    requirement: "Unlock Ra",
+    checkRequirement: () => Ra.isUnlocked,
+    currency: () => Currency.realityMachines,
+    currencyName: "Reality Machine",
+    cost: 1e15,
+    description: () => `All of Ra's pets gain Memory Chunks ${formatX(2)} faster`,
+    effect: 2,
+  },
+  {
+    id: 30,
+    name: "Memory Accelerator",
+    kind: "ra-memories",
+    requirement: "Unlock Ra",
+    checkRequirement: () => Ra.isUnlocked,
+    currency: () => Currency.realityMachines,
+    currencyName: "Reality Machine",
+    cost: 1e18,
+    description: () => `All Memory Chunks produce Memories ${formatX(3)} faster`,
+    effect: 3,
+  },
 ].map(config => {
   // Scale the extra benefit once, after evaluating any dynamic growth or condition.
   // Interest and offline bonuses are scaled in Overclock because they depend on total Time Flow.

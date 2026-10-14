@@ -141,7 +141,7 @@ class RaPetState extends GameMechanicState {
     if (this.hasRemembrance) res = res.times(Ra.remembrance.multiplier);
     else if (Ra.petWithRemembrance) res = res.times(Ra.remembrance.nerf);
     if (ExpansionPack.raPack.isBought && !player.disablePostReality) res = res.times(10);
-    return res;
+    return res.timesEffectOf(OverclockUpgrade(29));
   }
 
   get canGetMemoryChunks() {
@@ -272,7 +272,7 @@ export const Ra = {
       if (pet.isUnlocked) res = res.times(pet.memoryProductionMultiplier);
     }
     if (ExpansionPack.raPack.isBought && !player.disablePostReality) res = res.times(10);
-    return res;
+    return res.timesEffectOf(OverclockUpgrade(30));
   },
   get memoryBoostResources() {
     const boostList = [];
@@ -282,6 +282,7 @@ export const Ra = {
     if (Achievement(168).isUnlocked) boostList.push("Achievement 168");
     if (Ra.unlocks.continuousTTBoost.canBeApplied) boostList.push("current TT");
     if (ExpansionPack.raPack.isBought) boostList.push("Ra's Expansion Pack");
+    if (OverclockUpgrade(30).isEffectActive) boostList.push("Memory Accelerator");
     if (Achievement(236).isUnlocked) boostList.push("Achievement 236");
 
     if (boostList.length === 1) return `${boostList[0]}`;

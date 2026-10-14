@@ -36,6 +36,7 @@ export const Enslaved = {
   isReleaseTick: false,
   autoReleaseTick: 0,
   autoReleaseSpeed: new Decimal(0),
+  pulseTickDurationMs: 0,
   glyphLevelMin: 5000,
   currentBlackHoleStoreAmountPerMs: new Decimal(0),
   tachyonNerf: 0.3,

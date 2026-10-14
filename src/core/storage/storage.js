@@ -550,6 +550,7 @@ export const GameStorage = {
     checkPerkValidity();
     V.updateTotalRunUnlocks();
     Enslaved.boostReality = false;
+    Enslaved.pulseTickDurationMs = 0;
     GameEnd.additionalEnd = 0;
     Theme.set(Theme.currentName());
     Glyphs.unseen = [];

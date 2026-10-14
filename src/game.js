@@ -975,7 +975,14 @@ export function gameLoop(passedDiff, options = {}) {
   // Run all the functions which only depend on real time and not game time, skipping the rest of the loop if needed
   if (realTimeMechanics(realDiff)) return;
 
-  // Ra-Nameless auto-release stored time (once every 5 ticks)
+  // Measure live pulse ticks; Overclock may split one frame into several ticks.
+  // Offline simulation ticks have a different cadence and should not influence the dial optimizer.
+  if (Enslaved.isAutoReleasing && (options.overclocked || passedDiff === undefined)) {
+    Enslaved.pulseTickDurationMs = Enslaved.pulseTickDurationMs
+      ? 0.9 * Enslaved.pulseTickDurationMs + 0.1 * realDiff : realDiff;
+  }
+
+  // Ra-Nameless auto-release stored time at the selected tick interval.
   if (Enslaved.isAutoReleasing) {
     Enslaved.autoReleaseTick++;
   }

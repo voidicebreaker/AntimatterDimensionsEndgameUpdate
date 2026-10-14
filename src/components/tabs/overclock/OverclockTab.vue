@@ -16,6 +16,9 @@ export default {
       power: 5,
       scoreMultiplier: 1,
       hasOffline: false,
+      raUnlocked: false,
+      raChunkMultiplier: 1,
+      raMemoryMultiplier: 1,
     };
   },
   computed: {
@@ -41,6 +44,9 @@ export default {
       this.power = Overclock.power;
       this.scoreMultiplier = Overclock.scoreMultiplier;
       this.hasOffline = OverclockUpgrade(3).isEffectActive;
+      this.raUnlocked = Ra.isUnlocked;
+      this.raChunkMultiplier = OverclockUpgrade(29).effectOrDefault(1);
+      this.raMemoryMultiplier = OverclockUpgrade(30).effectOrDefault(1);
     },
     toggle() {
       Overclock.setEnabled(!this.isEnabled);
@@ -102,6 +108,11 @@ export default {
       <br>
       Boost and Turbo multiply both base speed and prestige gains before your purchased upgrades.
       <br>
+      <template v-if="raUnlocked">
+        Ra bonuses: {{ formatX(raChunkMultiplier) }} Memory Chunk gain and
+        {{ formatX(raMemoryMultiplier) }} Memory production, in addition to Time Flow.
+        <br>
+      </template>
       <span v-if="hasOffline">Night Shift applies {{ formatPercents(0.3) }} of the extra Time Flow speed offline.</span>
       <span v-else>Time Flow does not apply while you are offline.</span>
       Overclocks are permanent, cannot be refunded, and are kept through every kind of reset.

@@ -3,10 +3,13 @@ import { Laitela } from "@/core/globals";
 
 import SliderComponent from "@/components/SliderComponent";
 
+import BlackHolePulseOptimizer from "./BlackHolePulseOptimizer";
+
 export default {
   name: "BlackHoleChargingSliders",
   components: {
-    SliderComponent
+    SliderComponent,
+    BlackHolePulseOptimizer
   },
   data() {
     return {
@@ -130,7 +133,8 @@ export default {
       class="l-black-hole-sliders"
     >
       <b>
-        Black Holes will auto-release {{ formatPercents(amountSlider / 500, 2, 1) }} of Stored Game Time per second if Pulse is on.
+        Black Holes will auto-release {{ formatPercents(amountSlider / 500, 2, 1) }} of Stored Game Time on each release
+        if Pulse is on.
       </b>
       <SliderComponent
         v-if="areExtraSlidersUnlocked"
@@ -140,7 +144,7 @@ export default {
       />
       <br>
       <b>
-        Black Holes currently release Stored Game Time every {{ formatInt(timeSlider) }} ticks of Pulse is on.
+        Black Holes currently release Stored Game Time every {{ formatInt(timeSlider) }} ticks if Pulse is on.
       </b>
       <SliderComponent
         v-if="areExtraSlidersUnlocked"
@@ -148,6 +152,7 @@ export default {
         :value="timeSlider"
         @input="adjustSliderPulseTime($event)"
       />
+      <BlackHolePulseOptimizer />
     </div>
   </div>
 </template>

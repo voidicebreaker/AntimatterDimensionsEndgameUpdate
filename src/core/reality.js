@@ -713,6 +713,7 @@ export function finishProcessReality(realityProps) {
   player.dilation.lastEP = DC.DM1;
   Currency.antimatter.reset();
   Enslaved.autoReleaseTick = 0;
+  Enslaved.pulseTickDurationMs = 0;
   player.celestials.enslaved.hasSecretStudy = false;
   player.celestials.laitela.entropy = DC.D0;
 

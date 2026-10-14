@@ -52,8 +52,7 @@ class OverclockUpgradeState extends BitPurchasableMechanicState {
   }
 
   onPurchased() {
-    GameCache.totalIPMult.invalidate();
-    GameCache.totalCIPMult.invalidate();
+    Overclock.invalidateMultipliers();
     GameUI.notify.success(`Overclock installed: ${this.name}`);
   }
 }
@@ -115,6 +114,7 @@ export const Overclock = {
   },
 
   invalidateMultipliers() {
+    Enslaved.pulseTickDurationMs = 0;
     GameCache.totalIPMult.invalidate();
     GameCache.totalCIPMult.invalidate();
   },

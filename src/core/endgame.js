@@ -439,6 +439,7 @@ export const Endgame = {
     player.celestials.enslaved.glyphHintsGiven = 0;
     player.celestials.enslaved.zeroHintTime = 0;
     Enslaved.autoReleaseTick = 0;
+    Enslaved.pulseTickDurationMs = 0;
     player.celestials.v.run = false;
     if (!Achievement(218).isUnlocked) {
       player.celestials.v.unlockBits = ExpansionPack.vPack.isBought ? 1 : 0;
