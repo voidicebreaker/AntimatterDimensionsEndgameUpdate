@@ -66,6 +66,12 @@ const unlocks = mapGameDataToObject(
 );
 
 class RaPetState extends GameMechanicState {
+  constructor(config) {
+    super(config);
+    this._memorySingularityLevel = -1;
+    this._memorySingularityMultiplier = DC.D1;
+  }
+
   get data() {
     return player.celestials.ra.pets[this.id];
   }
@@ -156,6 +162,22 @@ class RaPetState extends GameMechanicState {
     return Decimal.pow(1.3, this.data.memoryUpgrades);
   }
 
+  get memorySingularityMultiplier() {
+    if (!OverclockUpgrade(31).isEffectActive) return DC.D1;
+    // The ratio only depends on this pet's level. Keep expensive powers out of the tick loop.
+    // Use the uncapped cost curve so reaching the cap never multiplies production by BEMAX.
+    const level = Math.max(60, this.level);
+    if (this._memorySingularityLevel !== level) {
+      this._memorySingularityLevel = level;
+      this._memorySingularityMultiplier = Ra.memoryCostForLevel(level).div(Ra.memoryCostForLevel(60));
+    }
+    return this._memorySingularityMultiplier.times(OverclockUpgrade(31).effectValue);
+  }
+
+  get memoryProductionPerChunk() {
+    return Ra.productionPerMemoryChunk.times(this.memoryUpgradeCurrentMult).times(this.memorySingularityMultiplier);
+  }
+
   get chunkUpgradeCurrentMult() {
     return Decimal.pow(1.5, this.data.chunkUpgrades);
   }
@@ -219,8 +241,8 @@ class RaPetState extends GameMechanicState {
       : DC.D0;
     // Adding memories from half of the gained chunks this tick results in the best mathematical behavior
     // for very long simulated ticks
-    const newMemories = (this.memoryChunks.add(newMemoryChunks.div(2))).times(seconds).times(Ra.productionPerMemoryChunk).times(
-      this.memoryUpgradeCurrentMult);
+    const newMemories = this.memoryChunks.add(newMemoryChunks.div(2))
+      .times(seconds).times(this.memoryProductionPerChunk);
     this.memoryChunks = this.memoryChunks.add(newMemoryChunks);
     this.memories = this.memories.add(newMemories);
   }
@@ -292,22 +314,30 @@ export const Ra = {
   // This is the exp required ON "level" in order to reach "level + 1"
   requiredMemoriesForLevel(level) {
     if (level >= Ra.levelCap) return DC.BEMAX;
+    return this.memoryCostForLevel(level);
+  },
+  memoryCostForLevel(level) {
     const adjustedLevel = Decimal.pow(level, 2).div(10).add(level);
     const post15Scaling = Decimal.pow(1.5, Decimal.max(0, level - 15));
     const post25Scaling = Decimal.pow(Decimal.max(0, level - 25).add(10), Decimal.max(0, level - 25).times(2));
     return Decimal.floor(Decimal.pow(adjustedLevel, 5.52).times(post15Scaling).times(post25Scaling).times(1e6));
   },
-  // Returns a string containing a time estimate for gaining a specific amount of exp (UI only)
-  timeToGoalString(pet, expToGain) {
-    // Quadratic formula for growth (uses constant growth for a = 0)
+  // Online wall-clock seconds at the current production rates; resource changes can change this estimate.
+  timeToGoal(pet, expToGain) {
+    const deficit = new Decimal(expToGain).max(0);
+    if (deficit.eq(0)) return DC.D0;
     const a = Enslaved.isStoringRealTime
       ? DC.D0
-      : Ra.productionPerMemoryChunk.times(pet.memoryUpgradeCurrentMult).times(pet.memoryChunksPerSecond).div(2);
-    const b = Ra.productionPerMemoryChunk.times(pet.memoryUpgradeCurrentMult).times(pet.memoryChunks);
-    const c = new Decimal(expToGain).neg();
-    let estimate = DC.D0;
-    if (a.eq(0)) estimate = c.neg().div(b);
-    else if (a.neq(0)) estimate = (Decimal.sqrt(Decimal.pow(b, 2).sub(a.times(c).times(4))).sub(b)).div(a.times(2));
+      : pet.memoryProductionPerChunk.times(pet.memoryChunksPerSecond).div(2);
+    const b = pet.memoryProductionPerChunk.times(pet.memoryChunks);
+    // Rationalize the positive quadratic root to avoid cancellation for large existing chunk pools.
+    let estimate;
+    if (a.eq(0)) estimate = b.eq(0) ? new Decimal(Infinity) : deficit.div(b);
+    else estimate = deficit.times(2).div(b.pow(2).add(a.times(deficit).times(4)).sqrt().add(b));
+    return estimate.div(Overclock.timeFlow);
+  },
+  timeToGoalString(pet, expToGain) {
+    const estimate = this.timeToGoal(pet, expToGain);
     if (Decimal.isFinite(estimate)) {
       return `in ${TimeSpan.fromSeconds(estimate).toStringShort()}`;
     }

@@ -25,6 +25,7 @@ export default {
       memoryChunks: new Decimal(0),
       memoryChunksPerSecond: new Decimal(0),
       memoriesPerSecond: new Decimal(0),
+      memorySingularityMultiplier: new Decimal(1),
       memoryMultiplier: 1,
       canGetMemoryChunks: false,
       memoryUpgradeCost: new Decimal(0),
@@ -79,7 +80,8 @@ export default {
       this.requiredMemories.copyFrom(pet.requiredMemories);
       this.memoryChunks.copyFrom(pet.memoryChunks);
       this.memoryChunksPerSecond.copyFrom(pet.memoryChunksPerSecond);
-      this.memoriesPerSecond.copyFrom(pet.memoryChunks.times(Ra.productionPerMemoryChunk).times(this.currentMemoryMult));
+      this.memoriesPerSecond.copyFrom(pet.memoryChunks.times(pet.memoryProductionPerChunk));
+      this.memorySingularityMultiplier.copyFrom(pet.memorySingularityMultiplier);
       this.canGetMemoryChunks = pet.canGetMemoryChunks;
       this.memoryMultiplier = pet.memoryProductionMultiplier;
       this.memoryUpgradeCost.copyFrom(pet.memoryUpgradeCost);
@@ -274,6 +276,9 @@ export default {
         </span>
       </div>
       <br v-else-if="!isRaCapped">
+      <div v-if="memorySingularityMultiplier.gt(1)">
+        Memory Singularity: ×{{ formatPostBreak(memorySingularityMultiplier, 2, 2) }} Memory production
+      </div>
       <br v-if="!isRaCapped">
       <div
         v-else

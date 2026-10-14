@@ -399,6 +399,19 @@ export const overclockUpgrades = [
     description: () => `All Memory Chunks produce Memories ${formatX(3)} faster`,
     effect: 3,
   },
+  {
+    id: 31,
+    name: "Memory Singularity",
+    kind: "ra-scaling",
+    requirement: "Unlock Ra's Expansion Pack",
+    checkRequirement: () => Ra.isUnlocked && ExpansionPack.raPack.isBought && !player.disablePostReality,
+    currency: () => Currency.realityMachines,
+    currencyName: "Reality Machine",
+    cost: 1e21,
+    description: () => `Each pet produces Memories ${formatX(1000)} faster. Above level ${formatInt(60)}, ` +
+      "this bonus also grows in proportion to that pet's next-level Memory cost. Stacks with Memory Accelerator",
+    effect: 1000,
+  },
 ].map(config => {
   // Scale the extra benefit once, after evaluating any dynamic growth or condition.
   // Interest and offline bonuses are scaled in Overclock because they depend on total Time Flow.

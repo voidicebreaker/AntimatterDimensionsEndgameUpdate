@@ -116,6 +116,8 @@ export default {
           which has been increased to {{ quantify("Memory", memoriesPerChunk, 2, 3) }} per second</span>.
         <br>
         Storing real time prevents Memory Chunk generation, but Memories will still be gained normally.
+        <br>
+        Time estimates use current production rates and online Overclock speed.
         <span v-if="memoriesPerChunk.gt(1)">
           <br>
           This is being increased due to {{ memoryBoosts }}.

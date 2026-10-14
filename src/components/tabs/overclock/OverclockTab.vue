@@ -19,6 +19,7 @@ export default {
       raUnlocked: false,
       raChunkMultiplier: 1,
       raMemoryMultiplier: 1,
+      hasRaSingularity: false,
     };
   },
   computed: {
@@ -47,6 +48,7 @@ export default {
       this.raUnlocked = Ra.isUnlocked;
       this.raChunkMultiplier = OverclockUpgrade(29).effectOrDefault(1);
       this.raMemoryMultiplier = OverclockUpgrade(30).effectOrDefault(1);
+      this.hasRaSingularity = OverclockUpgrade(31).isEffectActive;
     },
     toggle() {
       Overclock.setEnabled(!this.isEnabled);
@@ -112,6 +114,11 @@ export default {
         Ra bonuses: {{ formatX(raChunkMultiplier) }} Memory Chunk gain and
         {{ formatX(raMemoryMultiplier) }} Memory production, in addition to Time Flow.
         <br>
+        <template v-if="hasRaSingularity">
+          Memory Singularity adds {{ formatX(1000) }} Memory production per pet, scaling with level costs above
+          level {{ formatInt(60) }}. Each pet's multiplier is shown on the Ra tab.
+          <br>
+        </template>
       </template>
       <span v-if="hasOffline">Night Shift applies {{ formatPercents(0.3) }} of the extra Time Flow speed offline.</span>
       <span v-else>Time Flow does not apply while you are offline.</span>
