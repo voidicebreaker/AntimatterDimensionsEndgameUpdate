@@ -8,15 +8,23 @@ on:
     branches:
       - master
   workflow_dispatch:
-    branches:
-      - master
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
   build:
-    name: Deploy 🚀
+    name: Build and deploy Pages
+    if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
-      contents: write
+      contents: read
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -25,10 +33,14 @@ jobs:
         with:
           node-version: '14'
           cache: 'npm'
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
       - run: npm ci
       - run: npm run build:master
-      - uses: JamesIves/github-pages-deploy-action@v4
+      - name: Upload built site
+        uses: actions/upload-pages-artifact@v3
         with:
-          branch: gh-pages
-          folder: dist
-          single-commit: true
+          path: dist
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5
