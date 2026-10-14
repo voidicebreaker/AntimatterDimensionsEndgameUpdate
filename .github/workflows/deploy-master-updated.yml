@@ -1,7 +1,8 @@
-name: Deploy master
+name: Build master
 
 env:
-  FIREBASE_CONFIG: ${{ secrets.FIREBASE_CONFIG }}
+  VUE_APP_DEV: 'false'
+  VUE_APP_STEAM: 'false'
 
 on:
   push:
@@ -10,37 +11,43 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: master-build
+  cancel-in-progress: true
 
 jobs:
   build:
-    name: Build and deploy Pages
+    name: Build game for Nexus
     if: github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
         with:
           lfs: true
       - uses: actions/setup-node@v4
         with:
-          node-version: '14'
+          node-version: '24.19.0'
           cache: 'npm'
-      - name: Configure Pages
-        uses: actions/configure-pages@v5
-      - run: npm ci
-      - run: npm run build:master
+      - run: npm ci --no-audit --no-fund
+      # Match Nexus/scripts/build-antimatter.sh without rewriting source files.
+      - name: Build production game
+        run: ./node_modules/.bin/vue-cli-service build --mode production
+      - name: Include source revision and license
+        run: |
+          node build/post-build.js
+          cp LICENSE dist/LICENSE.txt
       - name: Upload built site
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
+          name: antimatter-${{ github.sha }}
           path: dist
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v5
+          if-no-files-found: error
+      - name: Explain publication
+        run: |
+          cat >> "$GITHUB_STEP_SUMMARY" <<'EOF'
+          ### Production build ready
+          This workflow builds the game; the live site is published by **voidicebreaker/Nexus**.
+          Update Nexus's generated `antimatter/` directory using `scripts/build-antimatter.sh`,
+          then commit and push it to Nexus's `main` branch. See this repository's README.
+          EOF
