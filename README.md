@@ -3,6 +3,8 @@
 This fork is hosted by [Nexus](https://github.com/voidicebreaker/Nexus) at
 [mindovermatter.space/antimatter/](https://mindovermatter.space/antimatter/).
 
+THIS IS FOR MY OWN FUCKING USE, IF YOU SEE A PR TO MAIN I AM SO, SO SORRY I SUCK AT CODING PLEASE JUST DELETE IT
+
 ## Publish through Nexus
 
 Nexus serves a generated copy of the game from its `antimatter/` directory.
