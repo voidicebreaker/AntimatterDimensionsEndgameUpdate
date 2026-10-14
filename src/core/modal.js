@@ -129,7 +129,7 @@ export class Modal {
   }
 
   show(modalConfig) {
-    if (!GameUI.initialized) return;
+    if (!GameUI.initialized || GlyphSolver.isSimulating) return;
     this._uniqueID = nextModalID++;
     this._props = Object.assign({}, modalConfig || {});
     if (this._closeEvent) this.applyCloseListeners(this._closeEvent);
@@ -382,7 +382,7 @@ Modal.addImportConflict = function(importingSave, currentSave) {
 
 Modal.message = new class extends Modal {
   show(text, props = {}, messagePriority = 0) {
-    if (!GameUI.initialized) return;
+    if (!GameUI.initialized || GlyphSolver.isSimulating) return;
     // It might be zero, so explicitly check for undefined
     if (this.currPriority === undefined) this.currPriority = messagePriority;
     else if (messagePriority < this.currPriority) return;

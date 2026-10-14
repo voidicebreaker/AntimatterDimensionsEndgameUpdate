@@ -147,6 +147,12 @@ export const GameUI = {
   },
   flushEvents() {
     this.flushPromise = undefined;
+    // Glyph Solver trials run the real game on a throwaway copy; re-rendering the whole UI for them only slows the
+    // solver down, so its tab polls for progress on its own instead
+    if (GlyphSolver.isSimulating) {
+      this.events = [];
+      return;
+    }
     if (DEV) {
       if (PerformanceStats.isOn && PerformanceStats.currentBlocks.length > 0) {
         Vue.nextTick(() => PerformanceStats.start("Vue Render"));
