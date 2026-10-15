@@ -18,7 +18,11 @@ export const GLYPH_SOLVER_METRICS = [
   decimalMetric("ep", "Eternity Points", () => Currency.eternityPoints.value),
   decimalMetric("rm", "Reality Machines", () => Currency.realityMachines.value),
   decimalMetric("im", "Imaginary Machines", () => Currency.imaginaryMachines.value),
-  decimalMetric("dm", "Dual Machines", () => Currency.dualMachines.value),
+  // Machine amounts only fill up toward their current caps; what a loadout changes is the cap the next Reality would
+  // set, which is what the Reality button shows as "iM Cap" / "jM Cap"
+  decimalMetric("imCap", "iM Cap (next Reality)", () => MachineHandler.projectedIMCap),
+  decimalMetric("dmCap", "jM Cap (next Reality)", () => MachineHandler.projectedDMCap),
+  decimalMetric("dm", "Dual Machines (fills to current cap)", () => Currency.dualMachines.value),
   decimalMetric("tt", "Time Theorems", () => Currency.timeTheorems.value.add(TimeTheorems.calculateTimeStudiesCost())),
   decimalMetric("tp", "Tachyon Particles", () => Currency.tachyonParticles.value),
   decimalMetric("dt", "Dilated Time", () => Currency.dilatedTime.value),
