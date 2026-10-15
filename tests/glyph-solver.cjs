@@ -88,8 +88,9 @@ const { chromium } = require("playwright-core");
       GameStorage.loadPlayerObject(GameSaveSerializer.deserialize(GameSaveSerializer.serialize(player)));
       GameIntervals.stop();
       const before = GameSaveSerializer.serialize(player);
+      // These checks cover the single-thread path; tests/solver-pool.cjs covers workers and successive halving
       Object.assign(GlyphSolver.settings, { seconds: 5, screenTicks: 4, refineTicks: 8, refineCount: 2,
-        target: "antimatter", useTimeFlow: false });
+        target: "antimatter", useTimeFlow: false, workers: 0, exhaustive: true });
       await GlyphSolver.solve();
       const run = GlyphSolver.status.lastRun;
       check(!GlyphSolver.status.error, `Solve finished without error ${GlyphSolver.status.error}`);

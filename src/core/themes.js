@@ -32,6 +32,13 @@ export const Theme = function Theme(name, config) {
   };
 
   this.set = function() {
+    // Solver trials load saves constantly and have no page to restyle or perk graph to rebuild
+    if (SolverHarness.isSimulating) {
+      if (player.options.newUI) player.options.themeModern = name;
+      else player.options.themeClassic = name;
+      ui.view.theme = name;
+      return;
+    }
     // Remove all entries in the class list from the class list
     document.body.classList.remove(...document.body.classList);
 

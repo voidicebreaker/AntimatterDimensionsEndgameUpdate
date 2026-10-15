@@ -2,6 +2,8 @@
 // Slot order never matters (effects combine per type), so a loadout is just a count per type. Each trial restores the
 // same starting state, equips its glyphs into empty slots, simulates a fixed span of real time with the player's own
 // autobuyers and automator, and records the resulting resources. The live save is restored when the run ends.
+import { SolverPool } from "./solver-pool";
+
 const SOLVER_TYPES = ["power", "infinity", "replication", "time", "dilation", "effarig", "reality"];
 const TYPE_LETTERS = {
   power: "P", infinity: "I", replication: "R", time: "T", dilation: "D", effarig: "E", reality: "Y"
@@ -16,6 +18,7 @@ export const GLYPH_SOLVER_METRICS = [
   decimalMetric("ep", "Eternity Points", () => Currency.eternityPoints.value),
   decimalMetric("rm", "Reality Machines", () => Currency.realityMachines.value),
   decimalMetric("im", "Imaginary Machines", () => Currency.imaginaryMachines.value),
+  decimalMetric("dm", "Dual Machines", () => Currency.dualMachines.value),
   decimalMetric("tt", "Time Theorems", () => Currency.timeTheorems.value.add(TimeTheorems.calculateTimeStudiesCost())),
   decimalMetric("tp", "Tachyon Particles", () => Currency.tachyonParticles.value),
   decimalMetric("dt", "Dilated Time", () => Currency.dilatedTime.value),
@@ -24,6 +27,13 @@ export const GLYPH_SOLVER_METRICS = [
   decimalMetric("realities", "Realities", () => Currency.realities.value),
   decimalMetric("celestialPoints", "Celestial Points", () => Currency.celestialPoints.value),
   decimalMetric("galacticPower", "Galactic Power", () => Currency.galacticPower.value),
+  decimalMetric("endgames", "Endgames", () => Currency.endgames.value),
+  decimalMetric("doomedParticles", "Doomed Particles", () => Currency.doomedParticles.value),
+  decimalMetric("celestialInfinityPoints", "Celestial Infinity Points", () => Currency.celestialInfinityPoints.value),
+  decimalMetric("celestialEternityPoints", "Celestial Eternity Points", () => Currency.celestialEternityPoints.value),
+  decimalMetric("divineMatter", "Divine Matter", () => Currency.divineMatter.value),
+  decimalMetric("perkPoints", "Perk Points", () => Currency.perkPoints.value),
+  decimalMetric("relicShards", "Relic Shards", () => Currency.relicShards.value),
   decimalMetric("celestialMatter", "Celestial Matter", () => Currency.celestialMatter.value),
   decimalMetric("etherealPower", "Ethereal Power", () => Currency.etherealPower.value),
   decimalMetric("darkMatter", "Dark Matter", () => Currency.darkMatter.value),
@@ -65,10 +75,17 @@ export const GlyphSolver = {
   synthesized: new WeakSet(),
   settings: {
     seconds: 600,
-    // Late-game ticks cost roughly 0.1 s each, so a full 406-loadout search at these settings takes about 25 minutes
+    // Successive halving: every loadout at quickTicks, the best keepFraction (at least keepMin) at screenTicks, then
+    // the best refineCount at refineTicks. Exhaustive runs every loadout at screenTicks instead.
+    quickTicks: 10,
     screenTicks: 30,
+    keepFraction: 0.25,
+    keepMin: 40,
     refineTicks: 300,
     refineCount: 10,
+    exhaustive: false,
+    // Web Workers to run trials on; 0 runs them on the page itself, pausing the game
+    workers: SolverPool.defaultSize,
     target: "antimatter",
     useTimeFlow: true,
     forceRestart: false,
@@ -81,8 +98,13 @@ export const GlyphSolver = {
     phase: "",
     done: 0,
     total: 0,
+    workDone: 0,
+    workTotal: 0,
     startedAt: 0,
     error: "",
+    note: "",
+    parallel: false,
+    workers: 0,
     lastRun: null,
   },
 
@@ -294,49 +316,160 @@ export const GlyphSolver = {
     return [...results].sort((a, b) => compareGlyphSolverMetric(metric, b.values[metric.key], a.values[metric.key]));
   },
 
+  // The order every result list is shown in: the most accurate runs first, then by the target metric
+  rankByAccuracy(results) {
+    const metric = GLYPH_SOLVER_METRICS.find(m => m.key === this.settings.target) ?? GLYPH_SOLVER_METRICS[0];
+    return [...results].sort((a, b) => b.ticks - a.ticks ||
+      compareGlyphSolverMetric(metric, b.values[metric.key], a.values[metric.key]));
+  },
+
+  // The accuracy steps of a solve. Successive halving screens every loadout quickly and spends the saved time on the
+  // contenders; the exhaustive search runs every loadout at screening accuracy instead.
+  rungs(settings, count) {
+    const refine = { label: "Refining", ticks: settings.refineTicks, size: Math.min(settings.refineCount, count) };
+    if (settings.exhaustive) {
+      return [{ label: "Screening", ticks: settings.screenTicks, size: count },
+        ...(settings.refineTicks > settings.screenTicks ? [refine] : [])];
+    }
+    const contenders = Math.min(count, Math.max(Math.ceil(count * settings.keepFraction), settings.keepMin));
+    return [
+      { label: "Quick screen", ticks: settings.quickTicks, size: count },
+      { label: "Screening", ticks: settings.screenTicks, size: contenders },
+      refine,
+    ];
+  },
+
+  get canUseWorkers() {
+    return SolverPool.isSupported && this.settings.workers > 0;
+  },
+
   async solve() {
     if (this.status.running || SolverHarness.isBusy || this.unavailableReason) return;
+    if (this.canUseWorkers) await this.solveParallel();
+    else await this.solveSingleThread();
+  },
+
+  startStatus(fields) {
+    Object.assign(this.status, {
+      running: true, cancelRequested: false, phase: "Preparing", done: 0, total: 0, startedAt: Date.now(),
+      workDone: 0, workTotal: 0, error: "", note: "", parallel: false, workers: 0, ...fields,
+    });
+  },
+
+  finishRun({ settings, seconds, pool, results }) {
+    // Frozen so the UI does not make hundreds of result objects reactive
+    this.status.lastRun = Object.freeze({
+      settings,
+      seconds,
+      cancelled: this.status.cancelRequested,
+      pool: pool.map(p => ({ type: p.type, letter: p.letter, cap: p.cap, owned: p.owned, isUniform: p.isUniform })),
+      results: this.rankByAccuracy(results),
+      finishedAt: Date.now(),
+    });
+    this.status.running = false;
+    this.status.phase = "";
+  },
+
+  // Runs the trials of each rung, keeping the best of one rung as the candidates of the next
+  async runRungs({ rungs, loadouts, results, runRung }) {
+    let candidates = loadouts;
+    for (const [index, rung] of rungs.entries()) {
+      this.status.phase = rung.label;
+      const rungResults = [];
+      await runRung(rung, candidates, (counts, values) => {
+        const result = { counts, name: this.describe(counts), values, ticks: rung.ticks };
+        results.set(result.name, result);
+        rungResults.push(result);
+        this.status.done++;
+        this.status.workDone += rung.ticks;
+      });
+      if (this.status.cancelRequested) return;
+      const next = rungs[index + 1];
+      if (next) candidates = this.rank(rungResults).slice(0, next.size).map(r => r.counts);
+    }
+  },
+
+  // Trials run in Web Workers on copies of the save, so the live game keeps running and is never touched
+  async solveParallel() {
     const settings = { ...this.settings, excluded: [...this.settings.excluded] };
     const pool = this.pool;
     const loadouts = this.loadouts(pool);
     const seconds = settings.seconds * (settings.useTimeFlow ? Overclock.timeFlow : 1);
-    const refineCount = Math.min(settings.refineTicks > settings.screenTicks ? settings.refineCount : 0,
-      loadouts.length);
+    const rungs = this.rungs(settings, loadouts.length);
+    const original = GameSaveSerializer.serialize(player);
+    this.startStatus({ phase: "Starting workers", parallel: true, workers: settings.workers,
+      total: rungs.reduce((sum, rung) => sum + rung.size, 0),
+      workTotal: rungs.reduce((sum, rung) => sum + rung.size * rung.ticks, 0) });
+
+    if (!await SolverPool.start(settings.workers)) {
+      this.status.running = false;
+      await this.solveSingleThread();
+      this.status.note = `Solved on the page instead: ${SolverPool.failure}`;
+      return;
+    }
+    const results = new Map();
+    const solverSettings = { excluded: settings.excluded, forceRestart: settings.forceRestart };
+    try {
+      this.status.phase = "Preparing";
+      const base = await SolverPool.single({ type: "prepare", kind: "glyph", original, settings: solverSettings });
+      const seed = Math.floor(Math.random() * 2 ** 31) + 1;
+      await SolverPool.broadcast({ type: "setBase", save: base, seed, settings: { glyph: solverSettings } });
+      await this.runRungs({
+        rungs,
+        loadouts,
+        results,
+        runRung: (rung, candidates, onResult) => SolverPool.run(candidates, {
+          message: counts => ({ type: "trial", kind: "glyph", choice: counts,
+            options: { seconds, realSeconds: settings.seconds, ticks: rung.ticks } }),
+          onResult,
+          isCancelled: () => this.status.cancelRequested,
+        }),
+      });
+    } catch (error) {
+      // Cancelling stops the workers, which abandons the trials they were running
+      if (!this.status.cancelRequested) {
+        this.status.error = error.message || String(error);
+        // eslint-disable-next-line no-console
+        console.error(error);
+      }
+    } finally {
+      SolverPool.release();
+      this.finishRun({ settings, seconds, pool, results: [...results.values()] });
+    }
+  },
+
+  // Runs every trial on this page, pausing the live game; used when workers are unavailable or turned off
+  async solveSingleThread() {
+    const settings = { ...this.settings, excluded: [...this.settings.excluded] };
+    const pool = this.pool;
+    const loadouts = this.loadouts(pool);
+    const seconds = settings.seconds * (settings.useTimeFlow ? Overclock.timeFlow : 1);
+    const rungs = this.rungs(settings, loadouts.length);
 
     const session = SolverHarness.begin("glyphs");
     if (!session) return;
-    Object.assign(this.status, {
-      running: true, cancelRequested: false, phase: "Preparing", done: 0,
-      total: loadouts.length + refineCount, startedAt: Date.now(), error: "",
-    });
-    let results = [];
+    this.startStatus({ total: rungs.reduce((sum, rung) => sum + rung.size, 0),
+      workTotal: rungs.reduce((sum, rung) => sum + rung.size * rung.ticks, 0) });
+    SolverHarness.trialSeed = Math.floor(Math.random() * 2 ** 31) + 1;
+    const results = new Map();
     try {
       if (this.needsRestart && !this.restartWithoutGlyphs()) {
         throw new Error("There is no inventory space to unequip your current Glyphs.");
       }
       const base = GameSaveSerializer.serialize(player);
-
-      this.status.phase = "Screening";
-      for (const counts of loadouts) {
-        const values = await this.runTrial(base, counts,
-          { seconds, realSeconds: settings.seconds, ticks: settings.screenTicks });
-        if (values === null) break;
-        results.push({ counts, name: this.describe(counts), values, ticks: settings.screenTicks });
-        this.status.done++;
-      }
-
-      if (!this.status.cancelRequested && refineCount > 0) {
-        this.status.phase = "Refining";
-        const ranked = this.rank(results).slice(0, refineCount);
-        for (const result of ranked) {
-          const values = await this.runTrial(base, result.counts,
-            { seconds, realSeconds: settings.seconds, ticks: settings.refineTicks });
-          if (values === null) break;
-          result.values = values;
-          result.ticks = settings.refineTicks;
-          this.status.done++;
-        }
-      }
+      await this.runRungs({
+        rungs,
+        loadouts,
+        results,
+        runRung: async(rung, candidates, onResult) => {
+          for (const counts of candidates) {
+            const values = await this.runTrial(base, counts,
+              { seconds, realSeconds: settings.seconds, ticks: rung.ticks });
+            if (values === null) return;
+            onResult(counts, values);
+          }
+        },
+      });
     } catch (error) {
       this.status.error = error.message || String(error);
       // eslint-disable-next-line no-console
@@ -344,23 +477,14 @@ export const GlyphSolver = {
     } finally {
       const restoreError = SolverHarness.end(session);
       if (restoreError) this.status.error = restoreError;
-      results = this.rank(results);
-      // Frozen so the UI does not make hundreds of result objects reactive
-      this.status.lastRun = Object.freeze({
-        settings,
-        seconds,
-        cancelled: this.status.cancelRequested,
-        pool: pool.map(p => ({ type: p.type, letter: p.letter, cap: p.cap, owned: p.owned, isUniform: p.isUniform })),
-        results,
-        finishedAt: Date.now(),
-      });
-      this.status.running = false;
-      this.status.phase = "";
+      this.finishRun({ settings, seconds, pool, results: [...results.values()] });
     }
   },
 
   cancel() {
-    if (this.status.running) this.status.cancelRequested = true;
+    if (!this.status.running) return;
+    this.status.cancelRequested = true;
+    if (this.status.parallel) SolverPool.stop();
   },
 
   // Equips a solved loadout for real, restarting the Reality first if any glyph is already equipped

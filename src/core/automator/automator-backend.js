@@ -358,6 +358,7 @@ export const AutomatorScroller = {
   },
 
   scrollToLine(line) {
+    if (SolverHarness.isSimulating) return;
     let editor, textHeight, lineToScroll;
     if (player.reality.automator.type === AUTOMATOR_TYPE.TEXT) {
       // We can't use CodeMirror's scrollIntoView() method as that forces the entire viewport to keep the line in view.

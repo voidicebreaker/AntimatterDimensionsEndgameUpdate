@@ -860,17 +860,22 @@ window.xorshift32Update = function xorshift32Update(state) {
 window.fastRandom = (function() {
   let state = Math.floor(Date.now()) % Math.pow(2, 32);
   const scale = 1 / (Math.pow(2, 32));
-  return () => {
+  const random = () => {
     state = xorshift32Update(state);
     return state * scale + 0.5;
   };
+  // Solvers reseed before every trial so that each strategy they compare faces the same luck
+  random.seed = seed => {
+    state = (seed >>> 0) || 1;
+  };
+  return random;
 }());
 
 // Normal distribution with specified mean and standard deviation
 window.normalDistribution = (function() {
   let haveSpare = false;
   let spare = 0;
-  return (mean, stdDev) => {
+  const distribution = (mean, stdDev) => {
     if (typeof mean !== "number" || typeof stdDev !== "number") return NaN;
     if (haveSpare) {
       haveSpare = false;
@@ -887,6 +892,10 @@ window.normalDistribution = (function() {
     spare = v * t;
     return mean + stdDev * u * t;
   };
+  distribution.reset = () => {
+    haveSpare = false;
+  };
+  return distribution;
 }());
 
 // Helper function for BTRD

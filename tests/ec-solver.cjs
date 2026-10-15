@@ -100,7 +100,7 @@ const { chromium } = require("playwright-core");
       ECSolver.goal = () => new Decimal(1);
       Object.assign(ECSolver.settings, {
         ec: 2, target: 1, seconds: 30, screenTicks: 10, confirmTicks: 20, confirmCount: 2, maxRounds: 2,
-        useTimeFlow: false, groups: { tree: false, crunch: true, replicanti: false, limits: false },
+        useTimeFlow: false, workers: 0, groups: { tree: false, crunch: true, replicanti: false, limits: false },
       });
       try {
         await ECSolver.solve();
@@ -148,7 +148,8 @@ const { chromium } = require("playwright-core");
       check(labels.crunch === "×1e100 highest IP" && labels.replicantiGalaxies === "Off" &&
         labels.limits === "No Antimatter Galaxies", "Coordinate descent finds the best option of every lever");
       check(trials === run.entries.length + 2, "Each distinct plan is screened once, and the best two confirmed once");
-      check(trials <= 2 + 2 * (4 + 1 + 2), `The search stays small (${trials} trials for three levers)`);
+      // Each round tries the 7 single-lever changes plus one combination; the second round finds no improvement
+      check(trials <= 1 + 2 * (7 + 1) + 2, `The search stays small (${trials} trials for three levers)`);
       return results;
     });
     assert.deepEqual(errors, []);

@@ -214,7 +214,8 @@ Vue.use(VueGtag, {
 });
 
 export const ui = new Vue({
-  el: "#ui",
+  // Solver workers load the whole game for its logic but never render it
+  el: self.SOLVER_WORKER ? undefined : "#ui",
   components: {
     GameUIComponent
   },

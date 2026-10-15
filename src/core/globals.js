@@ -108,6 +108,7 @@ export * from "./compression";
 export * from "./black-hole";
 export * from "./black-hole-pulse-optimizer";
 export * from "./solver-harness";
+export * from "./solver-pool";
 export * from "./glyph-solver";
 export * from "./ec-solver";
 export * from "./machines";

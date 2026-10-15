@@ -220,10 +220,11 @@ export function processManualReality(sacrifice, glyphID) {
 
   // Should be here so that the perk graphics update even when we're on the perk subtab, while also keeping its
   // relatively expensive operations off of the reality reset hot path for when realities are significantly faster
-  PerkNetwork.updatePerkColor();
+  if (!SolverHarness.isSimulating) PerkNetwork.updatePerkColor();
 }
 
 export function runRealityAnimation() {
+  if (SolverHarness.isSimulating) return;
   document.getElementById("ui").style.userSelect = "none";
   document.getElementById("ui").style.animation = "a-realize 10s 1";
   document.getElementById("realityanimbg").style.animation = "a-realizebg 10s 1";
@@ -482,11 +483,19 @@ export function beginProcessReality(realityProps) {
     }
   };
   const glyphsToSample = Math.min(glyphsToProcess, 10000);
+  // Solver trials take the "Quick Glyphs" shortcut from the start; generating every glyph of a huge amplified
+  // Reality synchronously would make a single trial take minutes
+  const quickFromStart = SolverHarness.isSimulating && glyphsToProcess > glyphsToSample;
+  if (quickFromStart) {
+    fastToggle = true;
+    glyphSample.toGenerate = glyphsToProcess;
+  }
   Async.run(glyphFunction,
-    glyphsToProcess,
+    quickFromStart ? glyphsToSample : glyphsToProcess,
     {
       batchSize: 100,
-      maxTime: 33,
+      // Solver trials must finish this synchronously; going async would restart the game intervals mid-trial
+      maxTime: SolverHarness.isSimulating ? Infinity : 33,
       sleepTime: 1,
       asyncEntry: doneSoFar => {
         GameIntervals.stop();

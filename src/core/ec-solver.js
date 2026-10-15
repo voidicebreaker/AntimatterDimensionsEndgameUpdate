@@ -3,6 +3,7 @@
 // buys the tree, enters the EC and lets the autobuyers play until the goal is reached or the time runs out. The search
 // is coordinate descent: change one lever at a time, keep any improvement, and repeat until nothing improves.
 // Nothing found here is ever applied to the real save; the player follows the advice themselves.
+import { SolverPool } from "./solver-pool";
 
 const SPLIT_PAIRS = [[221, 222], [223, 224], [225, 226], [227, 228], [231, 232], [233, 234]];
 // Built on first use, since the game's constants are not guaranteed to exist while modules are still loading
@@ -107,6 +108,8 @@ export const ECSolver = {
     confirmCount: 3,
     maxRounds: 4,
     useTimeFlow: true,
+    // Web Workers to run trials on; 0 runs them on the page itself, pausing the game
+    workers: SolverPool.defaultSize,
     groups: { tree: true, crunch: true, replicanti: true, limits: true },
   },
   status: {
@@ -117,6 +120,9 @@ export const ECSolver = {
     round: 0,
     startedAt: 0,
     error: "",
+    note: "",
+    parallel: false,
+    workers: 0,
     lastRun: null,
   },
 
@@ -345,55 +351,125 @@ export const ECSolver = {
     return rate > 0 ? (goalLog - endLog) / rate : null;
   },
 
+  get canUseWorkers() {
+    return SolverPool.isSupported && this.settings.workers > 0;
+  },
+
   async solve() {
     if (this.status.running || SolverHarness.isBusy || this.unavailableReason) return;
+    if (this.canUseWorkers) await this.solveParallel();
+    else await this.solveSingleThread();
+  },
+
+  // Everything a solve needs that does not depend on where its trials run
+  solveContext() {
     const id = this.challengeId;
     const settings = { ...this.settings, ec: id, groups: { ...this.settings.groups } };
-    const goal = this.goal(id, settings.target);
-    const goalLog = goal.log10().toNumber();
+    const goalLog = this.goal(id, settings.target).log10().toNumber();
     const seconds = settings.seconds * (settings.useTimeFlow ? Overclock.timeFlow : 1);
-    const levers = ecSolverLevers().filter(l => settings.groups[l.group]);
+    return {
+      id,
+      settings,
+      goalLog,
+      seconds,
+      levers: ecSolverLevers().filter(l => settings.groups[l.group]),
+      cache: new Map(),
+      trialOptions: ticks => ({
+        id, goalLog, seconds, realSeconds: settings.seconds, ticks, groups: settings.groups
+      }),
+    };
+  },
 
+  startStatus(fields) {
+    Object.assign(this.status, {
+      running: true, cancelRequested: false, phase: "Preparing", done: 0, round: 0, startedAt: Date.now(),
+      error: "", note: "", parallel: false, workers: 0, ...fields,
+    });
+  },
+
+  // Trials run in Web Workers on copies of the save, so the live game keeps running and is never touched
+  async solveParallel() {
+    const context = this.solveContext();
+    const { id, settings, cache, trialOptions } = context;
+    const original = GameSaveSerializer.serialize(player);
+    this.startStatus({ phase: "Starting workers", parallel: true, workers: settings.workers });
+    if (!await SolverPool.start(settings.workers)) {
+      this.status.running = false;
+      await this.solveSingleThread();
+      this.status.note = `Solved on the page instead: ${SolverPool.failure}`;
+      return;
+    }
+    try {
+      this.status.phase = "Preparing";
+      const base = await SolverPool.single({ type: "prepare", kind: "ec", original, settings: {} });
+      const seed = Math.floor(Math.random() * 2 ** 31) + 1;
+      await SolverPool.broadcast({ type: "setBase", save: base, seed, settings: {} });
+
+      // Trees are worked out by a worker on the fresh-Eternity state, so plans buying the same tree run only once
+      const evaluateBatch = async(plans, ticks) => {
+        const trees = await SolverPool.single({ type: "trees", plans, ec: id });
+        const jobs = new Map();
+        plans.forEach((plan, i) => {
+          const key = `${trees[i].key}@${ticks}`;
+          if (!cache.has(key) && !jobs.has(key)) {
+            jobs.set(key, { plan, key, planKey: trees[i].key, exportString: trees[i].exportString });
+          }
+        });
+        await SolverPool.run([...jobs.values()], {
+          message: job => ({ type: "trial", kind: "ec", choice: job.plan, options: trialOptions(ticks) }),
+          onResult: (job, result) => {
+            cache.set(job.key, { ...job, result });
+            this.status.done++;
+          },
+          isCancelled: () => this.status.cancelRequested,
+        });
+        return plans.map((plan, i) => cache.get(`${trees[i].key}@${ticks}`)).filter(Boolean);
+      };
+      await this.runSearch(context, evaluateBatch);
+    } catch (error) {
+      // Cancelling stops the workers, which abandons the trials they were running
+      if (!this.status.cancelRequested) {
+        this.status.error = error.message || String(error);
+        // eslint-disable-next-line no-console
+        console.error(error);
+      }
+    } finally {
+      SolverPool.release();
+      this.finishRun(context);
+    }
+  },
+
+  // Runs every trial on this page, pausing the live game; used when workers are unavailable or turned off
+  async solveSingleThread() {
+    const context = this.solveContext();
+    const { id, cache, trialOptions } = context;
     const session = SolverHarness.begin("ec");
     if (!session) return;
-    Object.assign(this.status, {
-      running: true, cancelRequested: false, phase: "Preparing", done: 0, round: 0, startedAt: Date.now(), error: "",
-    });
-    const cache = new Map();
+    this.startStatus({});
+    SolverHarness.trialSeed = Math.floor(Math.random() * 2 ** 31) + 1;
     try {
       this.prepareBase();
       const base = GameSaveSerializer.serialize(player);
-      const trialOptions = ticks => ({
-        id, goalLog, seconds, realSeconds: settings.seconds, ticks, groups: settings.groups
-      });
-
       // Trees are worked out on the fresh-Eternity state, so the cache key matches what each trial will buy
-      const evaluate = async(plan, ticks) => {
-        const planKey = this.planKey(plan, this.tree(plan, id));
-        const key = `${planKey}@${ticks}`;
-        if (cache.has(key)) return cache.get(key);
-        const result = await this.runTrial(base, plan, trialOptions(ticks));
-        SolverHarness.restoreTrial(base);
-        if (result === null) return null;
-        const entry = { plan, key, planKey, tree: this.tree(plan, id), result };
-        cache.set(key, entry);
-        this.status.done++;
-        return entry;
+      const evaluateBatch = async(plans, ticks) => {
+        const entries = [];
+        for (const plan of plans) {
+          if (this.status.cancelRequested) break;
+          const tree = this.tree(plan, id);
+          const planKey = this.planKey(plan, tree);
+          const key = `${planKey}@${ticks}`;
+          if (!cache.has(key)) {
+            const result = await this.runTrial(base, plan, trialOptions(ticks));
+            SolverHarness.restoreTrial(base);
+            if (result === null) break;
+            cache.set(key, { plan, key, planKey, exportString: tree.exportString, result });
+            this.status.done++;
+          }
+          entries.push(cache.get(key));
+        }
+        return entries;
       };
-
-      this.status.phase = "Searching";
-      await this.search({
-        evaluate: plan => evaluate(plan, settings.screenTicks),
-        startPlan: this.defaultPlan(id),
-        levers,
-        maxRounds: settings.maxRounds,
-      });
-
-      if (!this.status.cancelRequested && settings.confirmTicks > settings.screenTicks) {
-        this.status.phase = "Confirming";
-        const top = this.rankEntries([...cache.values()]).filter(e => !e.result.failed).slice(0, settings.confirmCount);
-        for (const entry of top) await evaluate(entry.plan, settings.confirmTicks);
-      }
+      await this.runSearch(context, evaluateBatch);
     } catch (error) {
       this.status.error = error.message || String(error);
       // eslint-disable-next-line no-console
@@ -401,48 +477,77 @@ export const ECSolver = {
     } finally {
       const restoreError = SolverHarness.end(session);
       if (restoreError) this.status.error = restoreError;
-      // Only the most accurate run of each plan is reported, so quick screening results never outrank confirmed ones
-      const byPlan = new Map();
-      for (const entry of cache.values()) {
-        const known = byPlan.get(entry.planKey);
-        if (!known || entry.result.ticks > known.result.ticks) byPlan.set(entry.planKey, entry);
-      }
-      const entries = this.rankEntries([...byPlan.values()]);
-      const confirmed = entries.filter(e => e.result.ticks === settings.confirmTicks);
-      const recommended = confirmed[0] ?? entries[0] ?? null;
-      // Frozen so the UI does not make every sample reactive
-      this.status.lastRun = Object.freeze({
-        settings,
-        seconds,
-        goalLog,
-        isAlphaForcedBulk: this.isAlphaForcedBulk,
-        cancelled: this.status.cancelRequested,
-        recommended: recommended && this.summarize(recommended, settings.groups),
-        entries: entries.map(e => this.summarize(e, settings.groups)),
-        finishedAt: Date.now(),
-      });
-      this.status.running = false;
-      this.status.phase = "";
+      this.finishRun(context);
     }
   },
 
-  // Coordinate descent: try every other option of one lever at a time, keeping whichever plan is best so far
-  async search({ evaluate, startPlan, levers, maxRounds }) {
-    let best = await evaluate(startPlan);
+  async runSearch({ id, settings, levers, cache }, evaluateBatch) {
+    this.status.phase = "Searching";
+    await this.search({
+      evaluateBatch: plans => evaluateBatch(plans, settings.screenTicks),
+      startPlan: this.defaultPlan(id),
+      levers,
+      maxRounds: settings.maxRounds,
+    });
+    if (!this.status.cancelRequested && settings.confirmTicks > settings.screenTicks) {
+      this.status.phase = "Confirming";
+      const top = this.rankEntries([...cache.values()]).filter(e => !e.result.failed).slice(0, settings.confirmCount);
+      await evaluateBatch(top.map(e => e.plan), settings.confirmTicks);
+    }
+  },
+
+  finishRun({ settings, seconds, goalLog, cache }) {
+    // Only the most accurate run of each plan is reported, so quick screening results never outrank confirmed ones
+    const byPlan = new Map();
+    for (const entry of cache.values()) {
+      const known = byPlan.get(entry.planKey);
+      if (!known || entry.result.ticks > known.result.ticks) byPlan.set(entry.planKey, entry);
+    }
+    const entries = this.rankEntries([...byPlan.values()]);
+    const confirmed = entries.filter(e => e.result.ticks === settings.confirmTicks);
+    const recommended = confirmed[0] ?? entries[0] ?? null;
+    // Frozen so the UI does not make every sample reactive
+    this.status.lastRun = Object.freeze({
+      settings,
+      seconds,
+      goalLog,
+      isAlphaForcedBulk: this.isAlphaForcedBulk,
+      cancelled: this.status.cancelRequested,
+      recommended: recommended && this.summarize(recommended, settings.groups),
+      entries: entries.map(e => this.summarize(e, settings.groups)),
+      finishedAt: Date.now(),
+    });
+    this.status.running = false;
+    this.status.phase = "";
+  },
+
+  // Coordinate descent in rounds: every single-lever change of the best plan so far is tried at once (in parallel
+  // when workers are available). The best change wins, unless combining every lever's improving change does better.
+  async search({ evaluateBatch, startPlan, levers, maxRounds }) {
+    let [best] = await evaluateBatch([startPlan]);
     for (let round = 1; best && round <= maxRounds && !this.status.cancelRequested; round++) {
       this.status.round = round;
-      const roundStart = best;
-      for (const lever of levers) {
-        const current = best.plan[lever.key];
-        const choices = lever.options.filter(choice => !sameValue(choice.value, current));
-        for (const choice of choices) {
-          if (this.status.cancelRequested) return best;
-          const entry = await evaluate({ ...best.plan, [lever.key]: choice.value });
-          if (entry && compareECSolverResults(entry.result, best.result) > 0) best = entry;
-        }
-        await yieldFrame();
+      const current = best;
+      const changes = levers.flatMap(lever => lever.options
+        .filter(choice => !sameValue(choice.value, current.plan[lever.key]))
+        .map(choice => ({ lever, plan: { ...current.plan, [lever.key]: choice.value } })));
+      const entries = await evaluateBatch(changes.map(c => c.plan));
+      const improving = new Map();
+      for (const entry of entries) {
+        if (compareECSolverResults(entry.result, current.result) <= 0) continue;
+        const lever = levers.find(l => !sameValue(entry.plan[l.key], current.plan[l.key]));
+        const known = improving.get(lever.key);
+        if (!known || compareECSolverResults(entry.result, known.result) > 0) improving.set(lever.key, entry);
       }
-      if (best === roundStart) break;
+      if (improving.size === 0) break;
+      const candidates = [...improving.values()];
+      if (improving.size > 1) {
+        const combined = { ...current.plan };
+        for (const [key, entry] of improving) combined[key] = entry.plan[key];
+        candidates.push(...await evaluateBatch([combined]));
+      }
+      best = candidates.reduce((a, b) => (compareECSolverResults(b.result, a.result) > 0 ? b : a));
+      await yieldFrame();
     }
     return best;
   },
@@ -457,7 +562,7 @@ export const ECSolver = {
     return {
       key: entry.key,
       choices: this.describePlan(entry.plan, groups),
-      exportString: entry.tree.exportString,
+      exportString: entry.exportString,
       failed: result.failed,
       reason: result.reason,
       reachedAt: result.reachedAt,
@@ -468,6 +573,8 @@ export const ECSolver = {
   },
 
   cancel() {
-    if (this.status.running) this.status.cancelRequested = true;
+    if (!this.status.running) return;
+    this.status.cancelRequested = true;
+    if (this.status.parallel) SolverPool.stop();
   },
 };

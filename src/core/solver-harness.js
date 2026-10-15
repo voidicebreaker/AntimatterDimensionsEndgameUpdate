@@ -9,6 +9,8 @@ const yieldFrame = () => new Promise(resolve => setTimeout(resolve, 0));
 
 export const SolverHarness = {
   isSimulating: false,
+  // Every trial of a solve starts from the same random state, so strategies are compared on equal luck
+  trialSeed: 1,
   // Name of the solver currently running, so two solvers never interleave their trials
   owner: null,
 
@@ -43,6 +45,10 @@ export const SolverHarness = {
   restoreTrial(base) {
     this.restoreSave(base, false);
     GameIntervals.stop();
+    fastRandom.seed(this.trialSeed);
+    normalDistribution.reset();
+    GlyphGenerator.fakeSeed = this.trialSeed;
+    GlyphGenerator.fakeSecondGaussian = null;
   },
 
   // Simulates the given real time in the given number of ticks. onStep(fraction) runs after every tick and may return

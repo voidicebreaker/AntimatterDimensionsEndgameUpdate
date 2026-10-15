@@ -9,6 +9,7 @@ export default {
     }, duration * 1000);
   },
   display(name, duration) {
+    if (SolverHarness.isSimulating) return;
     if (!this.isDisplaying) {
       this.displayForce(name, duration);
     }

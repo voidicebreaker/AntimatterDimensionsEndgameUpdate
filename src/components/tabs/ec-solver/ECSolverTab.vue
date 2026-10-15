@@ -16,6 +16,11 @@ export default {
       done: 0,
       round: 0,
       elapsed: 0,
+      parallel: false,
+      workersInUse: 0,
+      maxWorkers: SolverPool.maxSize,
+      canUseWorkers: SolverPool.isSupported,
+      note: "",
       error: "",
       lastRun: null,
       showAll: false,
@@ -69,6 +74,9 @@ export default {
       this.done = status.done;
       this.round = status.round;
       this.elapsed = status.running ? (Date.now() - status.startedAt) / 1000 : 0;
+      this.parallel = status.parallel;
+      this.workersInUse = status.workers;
+      this.note = status.note;
       this.error = status.error;
       this.lastRun = status.lastRun;
     },
@@ -186,6 +194,18 @@ export default {
         >
         Include Overclock time flow
       </label>
+      <label v-if="canUseWorkers">
+        CPU workers
+        <input
+          v-model.number="settings.workers"
+          type="number"
+          min="0"
+          :max="maxWorkers"
+          class="c-ec-solver__input"
+          :disabled="running"
+        >
+        (0 runs on this page and pauses the game)
+      </label>
     </div>
 
     <div class="c-ec-solver__controls">
@@ -219,6 +239,27 @@ export default {
       class="c-ec-solver__warning"
     >
       {{ error }}
+    </div>
+    <div
+      v-if="note"
+      class="c-ec-solver__warning"
+    >
+      {{ note }}
+    </div>
+
+    <div
+      v-if="running && parallel"
+      class="c-ec-solver__progress"
+    >
+      <b>EC Solver: {{ phase }}<span v-if="round"> (round {{ formatInt(round) }})</span></b>
+      on {{ formatInt(workersInUse) }} workers. {{ formatInt(done) }} plans tried in {{ elapsedText }}.
+      You can keep playing; the solver works on a copy of your save.
+      <button
+        class="o-primary-btn c-ec-solver__button"
+        @click="cancel"
+      >
+        Cancel
+      </button>
     </div>
 
     <button
@@ -303,7 +344,7 @@ export default {
     </div>
 
     <div
-      v-if="running"
+      v-if="running && !parallel"
       class="c-ec-solver__overlay"
     >
       <div class="c-ec-solver__overlay-box">
@@ -423,6 +464,16 @@ export default {
   border-radius: var(--var-border-radius, 0.5rem);
   padding: 1.5rem;
   background: var(--color-base);
+}
+
+.c-ec-solver__progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  border: var(--var-border-width, 0.2rem) solid var(--color-eternity);
+  border-radius: var(--var-border-radius, 0.5rem);
+  padding: 1rem;
 }
 
 .c-ec-solver__button {

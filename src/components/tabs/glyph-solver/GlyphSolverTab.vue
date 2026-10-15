@@ -15,7 +15,14 @@ export default {
       phase: "",
       done: 0,
       total: 0,
+      workDone: 0,
+      workTotal: 0,
       elapsed: 0,
+      parallel: false,
+      workersInUse: 0,
+      maxWorkers: SolverPool.maxSize,
+      canUseWorkers: SolverPool.isSupported,
+      note: "",
       error: "",
       lastRun: null,
       confirmApply: null,
@@ -30,10 +37,11 @@ export default {
     targetMetric() {
       return this.metrics.find(m => m.key === this.settings.target) ?? this.metrics[0];
     },
+    // The most accurate runs first, as only the contenders were re-run at higher accuracy
     rankedResults() {
       if (!this.lastRun) return [];
       const metric = this.targetMetric;
-      return [...this.lastRun.results].sort((a, b) =>
+      return [...this.lastRun.results].sort((a, b) => b.ticks - a.ticks ||
         compareGlyphSolverMetric(metric, b.values[metric.key], a.values[metric.key]));
     },
     visibleResults() {
@@ -65,13 +73,17 @@ export default {
     simulatedSpan() {
       return this.lastRun ? TimeSpan.fromSeconds(this.lastRun.seconds).toStringShort() : "";
     },
+    // Progress is measured in simulated ticks, since later rungs run far fewer but much longer trials
     progressPercent() {
-      return this.total === 0 ? 0 : 100 * this.done / this.total;
+      return this.workTotal === 0 ? 0 : 100 * this.workDone / this.workTotal;
     },
     eta() {
-      if (this.done === 0) return "";
-      const remaining = this.elapsed / this.done * (this.total - this.done);
+      if (this.workDone === 0) return "";
+      const remaining = this.elapsed / this.workDone * (this.workTotal - this.workDone);
       return TimeSpan.fromSeconds(remaining).toStringShort();
+    },
+    trialRate() {
+      return this.elapsed > 0 ? this.done / this.elapsed : 0;
     },
   },
   watch: {
@@ -102,7 +114,12 @@ export default {
       this.phase = status.phase;
       this.done = status.done;
       this.total = status.total;
+      this.workDone = status.workDone;
+      this.workTotal = status.workTotal;
       this.elapsed = status.running ? (Date.now() - status.startedAt) / 1000 : 0;
+      this.parallel = status.parallel;
+      this.workersInUse = status.workers;
+      this.note = status.note;
       this.error = status.error;
       this.lastRun = status.lastRun;
     },
@@ -191,8 +208,27 @@ export default {
         >
         real seconds
       </label>
-      <label>
-        Screen at
+      <label v-if="!settings.exhaustive">
+        Quick screen at
+        <input
+          v-model.number="settings.quickTicks"
+          type="number"
+          min="1"
+          class="c-glyph-solver__input"
+          :disabled="running"
+        >
+        ticks, then the best {{ formatPercents(settings.keepFraction) }} at
+        <input
+          v-model.number="settings.screenTicks"
+          type="number"
+          min="1"
+          class="c-glyph-solver__input"
+          :disabled="running"
+        >
+        ticks
+      </label>
+      <label v-else>
+        Screen every loadout at
         <input
           v-model.number="settings.screenTicks"
           type="number"
@@ -243,6 +279,26 @@ export default {
           :disabled="running"
         >
         Include Overclock time flow
+      </label>
+      <label>
+        <input
+          v-model="settings.exhaustive"
+          type="checkbox"
+          :disabled="running"
+        >
+        Exhaustive (slower; no quick screen)
+      </label>
+      <label v-if="canUseWorkers">
+        CPU workers
+        <input
+          v-model.number="settings.workers"
+          type="number"
+          min="0"
+          :max="maxWorkers"
+          class="c-glyph-solver__input"
+          :disabled="running"
+        >
+        (0 runs on this page and pauses the game)
       </label>
       <label v-if="canForceRestart">
         <input
@@ -350,7 +406,37 @@ export default {
     </div>
 
     <div
-      v-if="running"
+      v-if="note"
+      class="c-glyph-solver__warning"
+    >
+      {{ note }}
+    </div>
+
+    <div
+      v-if="running && parallel"
+      class="c-glyph-solver__progress"
+    >
+      <b>Glyph Solver: {{ phase }}</b> on {{ formatInt(workersInUse) }} workers.
+      {{ formatInt(done) }} / {{ formatInt(total) }} trials ({{ format(trialRate, 2, 2) }}/s)<span
+        v-if="eta"
+      >, about {{ eta }} left</span>.
+      <div class="c-glyph-solver__bar">
+        <div
+          class="c-glyph-solver__bar-fill"
+          :style="{ width: `${progressPercent}%` }"
+        />
+      </div>
+      You can keep playing; the solver works on a copy of your save.
+      <button
+        class="o-primary-btn c-glyph-solver__button"
+        @click="cancel"
+      >
+        Cancel
+      </button>
+    </div>
+
+    <div
+      v-if="running && !parallel"
       class="c-glyph-solver__overlay"
     >
       <div class="c-glyph-solver__overlay-box">
@@ -479,6 +565,16 @@ export default {
 .c-glyph-solver__bar-fill {
   height: 100%;
   background: var(--color-reality);
+}
+
+.c-glyph-solver__progress {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  border: var(--var-border-width, 0.2rem) solid var(--color-reality);
+  border-radius: var(--var-border-radius, 0.5rem);
+  padding: 1rem;
 }
 
 .c-glyph-solver__button {
