@@ -52,9 +52,10 @@ export const SolverHarness = {
   },
 
   // Simulates the given real time in the given number of ticks. onStep(fraction) runs after every tick and may return
-  // true to stop early. Resolves to "done", "stopped" or "cancelled".
-  async runTicks({ seconds, ticks, onStep, isCancelled }) {
-    const step = createSimulationStepper(seconds);
+  // true to stop early. uniform gives every tick the same real time (see createSimulationStepper). Resolves to "done",
+  // "stopped" or "cancelled".
+  async runTicks({ seconds, ticks, uniform = false, onStep, isCancelled }) {
+    const step = createSimulationStepper(seconds, { uniform });
     let left = ticks;
     while (left > 0) {
       const chunkStart = Date.now();

@@ -1904,10 +1904,12 @@ function afterSimulation(seconds, playerBefore) {
 // Returns a function which simulates one tick, given how many ticks remain (including this one). Each call splits the
 // remaining real time evenly among the remaining ticks, so the tick count may shrink partway through ("Speed up").
 // Black Hole cycles are accounted for by splitting intervals on real time instead, keeping ticks roughly equal in game
-// time. Black hole auto-pausing is handled by the phase advancement code and calculateOfflineTick.
-export function createSimulationStepper(seconds) {
+// time. Black hole auto-pausing is handled by the phase advancement code and calculateOfflineTick. That can put almost
+// all of the real time into a few ticks, so uniform instead gives every tick the same real time and lets the game loop
+// apply the Black Holes itself, as in live play.
+export function createSimulationStepper(seconds, { uniform = false } = {}) {
   let remainingRealSeconds = seconds;
-  if (BlackHoles.areUnlocked && !BlackHoles.arePaused) {
+  if (!uniform && BlackHoles.areUnlocked && !BlackHoles.arePaused) {
     return i => {
       const [realTickTime, blackHoleSpeedup] = BlackHoles.calculateOfflineTick(remainingRealSeconds,
         i, 0.0001);

@@ -13,7 +13,7 @@ GameIntervals.stop();
 ElectronRuntime.initialize();
 SteamRuntime.initialize();
 
-const solvers = { glyph: GlyphSolver, ec: ECSolver };
+const solvers = { glyph: GlyphSolver, ec: ECSolver, hadron: HadronSolver };
 let base = null;
 
 // Decimals cannot cross postMessage as class instances, so values travel as strings and are rebuilt on the page

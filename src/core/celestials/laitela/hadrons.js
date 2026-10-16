@@ -2,6 +2,46 @@ export const Hadrons = {
   get hadrons() {
     return player.celestials.laitela.hadrons;
   },
+  // Before Divinity 3 the split is how many Hadrons are Light (the rest are Dark); afterwards Light and Dark are
+  // always equal and the split is how many of them have been merged into Exotic Hadrons
+  get usesExotic() {
+    return DivinityMilestone.hadronEmpowerment.isReached;
+  },
+  get split() {
+    return this.usesExotic ? this.hadrons.exotic : this.hadrons.light;
+  },
+  // Every split that setSplit accepts, from 0 to the number of Hadrons
+  get splits() {
+    return Array.range(0, this.hadrons.total + 1);
+  },
+  get canChangeSplit() {
+    return DualityUpgrade(19).isBought && !(this.usesExotic && Slabdrill.isCursed);
+  },
+  describeSplit(split, usesExotic = this.usesExotic, total = this.hadrons.total) {
+    return usesExotic
+      ? `${formatInt(split)} Exotic, ${formatInt(total - split)} Light and Dark`
+      : `${formatInt(split)} Light / ${formatInt(total - split)} Dark`;
+  },
+  // Moves straight to the given split with a single reset: Lai'tela's Dark Matter, annihilation and Singularities
+  // are lost, along with the current Reality (or Endgame, once Exotic Hadrons are unlocked). Returns false if nothing
+  // changed.
+  setSplit(target) {
+    const hadrons = this.hadrons;
+    const split = Math.clamp(Math.round(target), 0, hadrons.total);
+    if (split === this.split || !this.canChangeSplit) return false;
+    Laitela.reset();
+    if (this.usesExotic) {
+      Endgame.resetNoReward();
+      hadrons.exotic = split;
+      hadrons.light = hadrons.total - split;
+      hadrons.dark = hadrons.total - split;
+    } else {
+      finishProcessReality({ reset: true });
+      hadrons.light = split;
+      hadrons.dark = hadrons.total - split;
+    }
+    return true;
+  },
   get timeFactor() {
     return DualityUpgrade(15).isBought ? Time.thisEndgameRealTime._ms.div(36000) : DC.D0;
   },

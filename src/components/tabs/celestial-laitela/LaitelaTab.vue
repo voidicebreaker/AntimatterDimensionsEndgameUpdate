@@ -3,6 +3,7 @@ import AnnihilationButton from "./AnnihilationButton";
 import AutoLaitelaPanel from "./AutoLaitelaPanel";
 import CelestialQuoteHistory from "@/components/CelestialQuoteHistory";
 import DarkMatterDimensionGroup from "./DarkMatterDimensionGroup";
+import HadronSolverPanel from "./HadronSolverPanel";
 import HadronsPane from "./HadronsPane";
 import LaitelaAutobuyerPane from "./LaitelaAutobuyerPane";
 import LaitelaRunButton from "./LaitelaRunButton";
@@ -22,6 +23,7 @@ export default {
     LaitelaAutobuyerPane,
     CelestialQuoteHistory,
     HadronsPane,
+    HadronSolverPanel,
     PrimaryButton
   },
   data() {
@@ -167,6 +169,7 @@ export default {
     </h2>
     <SingularityPane v-if="singularitiesUnlocked" />
     <HadronsPane v-if="hadronsUnlocked" />
+    <HadronSolverPanel v-if="hadronsUnlocked" />
     <LaitelaAutobuyerPane v-if="autobuyersUnlocked" />
     <AutoLaitelaPanel />
     <div class="l-laitela-mechanics-container">

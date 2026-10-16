@@ -10,6 +10,8 @@ export const AutoLaitela = {
   watching: false,
   status: "",
   log: [],
+  // Set by the Hadron Solver so Auto Lai'tela also runs on the throwaway copies of the save it simulates
+  allowInSimulation: false,
 
   get unavailableReason() {
     if (!Laitela.isUnlocked) return "Unlock Lai'tela first.";
@@ -57,7 +59,7 @@ export const AutoLaitela = {
 
   // Called once per game tick, after Lai'tela's own completion check
   tick() {
-    if (!this.isActive || SolverHarness.isSimulating) return;
+    if (!this.isActive || (SolverHarness.isSimulating && !this.allowInSimulation)) return;
     const reason = this.unavailableReason;
     if (reason) {
       this.stop(`Stopped: ${reason}`);

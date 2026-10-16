@@ -143,73 +143,18 @@ export default {
       this.showWarning = Accelerators.emptiness.effectValue2 > 1;
       this.isFlipped = player.universes.current === 2;
     },
+    // Assigning moves Hadrons toward Dark (or Exotic, once Light and Dark are merged); each change costs one reset
     assignOne() {
-      if (this.hasExotic) {
-        if (Slabdrill.isCursed) return;
-        if (this.lightHadrons <= 0) return;
-        Laitela.reset();
-        Endgame.resetNoReward();
-        player.celestials.laitela.hadrons.light -= 1;
-        player.celestials.laitela.hadrons.dark -= 1;
-        player.celestials.laitela.hadrons.exotic += 1;
-      } else {
-        if (this.lightHadrons <= 0) return;
-        Laitela.reset();
-        finishProcessReality({ reset: true });
-        player.celestials.laitela.hadrons.light -= 1;
-        player.celestials.laitela.hadrons.dark += 1;
-      }
+      Hadrons.setSplit(Hadrons.usesExotic ? Hadrons.split + 1 : Hadrons.split - 1);
     },
     unassignOne() {
-      if (this.hasExotic) {
-        if (Slabdrill.isCursed) return;
-        if (this.exoticHadrons <= 0) return;
-        Laitela.reset();
-        Endgame.resetNoReward();
-        player.celestials.laitela.hadrons.light += 1;
-        player.celestials.laitela.hadrons.dark += 1;
-        player.celestials.laitela.hadrons.exotic -= 1;
-      } else {
-        if (this.darkHadrons <= 0) return;
-        Laitela.reset();
-        finishProcessReality({ reset: true });
-        player.celestials.laitela.hadrons.light += 1;
-        player.celestials.laitela.hadrons.dark -= 1;
-      }
+      Hadrons.setSplit(Hadrons.usesExotic ? Hadrons.split - 1 : Hadrons.split + 1);
     },
     assignAll() {
-      if (this.hasExotic) {
-        if (Slabdrill.isCursed) return;
-        if (this.lightHadrons <= 0) return;
-        Laitela.reset();
-        Endgame.resetNoReward();
-        player.celestials.laitela.hadrons.light = 0;
-        player.celestials.laitela.hadrons.dark = 0;
-        player.celestials.laitela.hadrons.exotic = player.celestials.laitela.hadrons.total;
-      } else {
-        if (this.lightHadrons <= 0) return;
-        Laitela.reset();
-        finishProcessReality({ reset: true });
-        player.celestials.laitela.hadrons.light = 0;
-        player.celestials.laitela.hadrons.dark = player.celestials.laitela.hadrons.total;
-      }
+      Hadrons.setSplit(Hadrons.usesExotic ? Hadrons.hadrons.total : 0);
     },
     unassignAll() {
-      if (this.hasExotic) {
-        if (Slabdrill.isCursed) return;
-        if (this.exoticHadrons <= 0) return;
-        Laitela.reset();
-        Endgame.resetNoReward();
-        player.celestials.laitela.hadrons.light = player.celestials.laitela.hadrons.total;
-        player.celestials.laitela.hadrons.dark = player.celestials.laitela.hadrons.total;
-        player.celestials.laitela.hadrons.exotic = 0;
-      } else {
-        if (this.darkHadrons <= 0) return;
-        Laitela.reset();
-        finishProcessReality({ reset: true });
-        player.celestials.laitela.hadrons.light = player.celestials.laitela.hadrons.total;
-        player.celestials.laitela.hadrons.dark = 0;
-      }
+      Hadrons.setSplit(Hadrons.usesExotic ? 0 : Hadrons.hadrons.total);
     }
   }
 };

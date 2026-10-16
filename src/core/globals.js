@@ -112,6 +112,7 @@ export * from "./solver-harness";
 export * from "./solver-pool";
 export * from "./glyph-solver";
 export * from "./ec-solver";
+export * from "./hadron-solver";
 export * from "./machines";
 export * from "./break-eternity-upgrades";
 export * from "./devtools";
