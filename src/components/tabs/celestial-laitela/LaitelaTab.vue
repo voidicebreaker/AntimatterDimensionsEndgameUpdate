@@ -1,5 +1,6 @@
 <script>
 import AnnihilationButton from "./AnnihilationButton";
+import AutoLaitelaPanel from "./AutoLaitelaPanel";
 import CelestialQuoteHistory from "@/components/CelestialQuoteHistory";
 import DarkMatterDimensionGroup from "./DarkMatterDimensionGroup";
 import HadronsPane from "./HadronsPane";
@@ -13,6 +14,7 @@ export default {
   name: "LaitelaTab",
   components: {
     LaitelaRunButton,
+    AutoLaitelaPanel,
     SingularityPane,
     SingularityMilestonePane,
     DarkMatterDimensionGroup,
@@ -166,6 +168,7 @@ export default {
     <SingularityPane v-if="singularitiesUnlocked" />
     <HadronsPane v-if="hadronsUnlocked" />
     <LaitelaAutobuyerPane v-if="autobuyersUnlocked" />
+    <AutoLaitelaPanel />
     <div class="l-laitela-mechanics-container">
       <LaitelaRunButton />
       <div>

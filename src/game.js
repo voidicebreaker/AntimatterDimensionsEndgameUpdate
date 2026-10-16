@@ -1435,6 +1435,7 @@ export function gameLoop(passedDiff, options = {}) {
   hadrons.totalExotic = hadrons.exotic + waves;
 
   laitelaRealityTick(realDiff);
+  AutoLaitela.tick();
   Achievements.autoAchieveUpdate(diff);
   V.checkForUnlocks();
   V.updateTotalRunUnlocks();
@@ -1705,7 +1706,8 @@ function laitelaRealityTick(realDiff) {
         ${TimeSpan.fromSeconds(new Decimal(laitelaInfo.fastestCompletion)).toStringShort()} to improve your multiplier.`;
     }
     if (Laitela.isFullyDestabilized) SpeedrunMilestones(24).tryComplete();
-    Modal.message.show(completionText, {}, 2);
+    // Auto Lai'tela logs its own runs; a dialog for every quick completion would just pile up
+    if (!AutoLaitela.isActive) Modal.message.show(completionText, {}, 2);
   }
 }
 
