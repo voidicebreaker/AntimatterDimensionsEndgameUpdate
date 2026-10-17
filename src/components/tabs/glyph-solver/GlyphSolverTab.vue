@@ -1,6 +1,11 @@
 <script>
+import GlyphHadronSolverBox from "./GlyphHadronSolverBox";
+
 export default {
   name: "GlyphSolverTab",
+  components: {
+    GlyphHadronSolverBox,
+  },
   data() {
     return {
       unavailableReason: "",
@@ -10,6 +15,10 @@ export default {
       loadoutCount: 0,
       needsRestart: false,
       canForceRestart: false,
+      canMeasureLaitela: false,
+      hadronsAvailable: false,
+      combinedRunning: false,
+      combinedReason: "",
       settings: { ...GlyphSolver.settings },
       running: false,
       phase: "",
@@ -34,15 +43,29 @@ export default {
     metrics() {
       return GLYPH_SOLVER_METRICS;
     },
+    alsoHadrons() {
+      return this.settings.alsoHadrons && this.hadronsAvailable;
+    },
+    // Lai'tela metrics only mean something when the solve measures Lai'tela, which a joint search with the Hadron
+    // Solver does whenever it ranks by Lai'tela; a joint search can only rank by what both solvers record
+    targetChoices() {
+      if (this.alsoHadrons) return GlyphHadronSolver.targets.filter(m => this.canMeasureLaitela || !m.laitela);
+      const laitela = this.settings.laitela && this.canMeasureLaitela;
+      return this.metrics.filter(m => laitela || !m.laitela);
+    },
+    busy() {
+      return this.running || this.combinedRunning;
+    },
+    measuredLaitela() {
+      return Boolean(this.lastRun?.settings.laitela);
+    },
     targetMetric() {
       return this.metrics.find(m => m.key === this.settings.target) ?? this.metrics[0];
     },
     // The most accurate runs first, as only the contenders were re-run at higher accuracy
     rankedResults() {
       if (!this.lastRun) return [];
-      const metric = this.targetMetric;
-      return [...this.lastRun.results].sort((a, b) => b.ticks - a.ticks ||
-        compareGlyphSolverMetric(metric, b.values[metric.key], a.values[metric.key]));
+      return rankGlyphSolverResults(this.lastRun.results, this.settings.target, true);
     },
     visibleResults() {
       return this.showAll ? this.rankedResults : this.rankedResults.slice(0, 25);
@@ -73,6 +96,17 @@ export default {
     simulatedSpan() {
       return this.lastRun ? TimeSpan.fromSeconds(this.lastRun.seconds).toStringShort() : "";
     },
+    // In simulated time, like simulatedSpan, so it includes Overclock time flow when the solve did
+    // Glyph solves in a Glyphs + Hadrons search run at a chosen Hadron split
+    splitText() {
+      const split = this.lastRun?.settings.split;
+      return split === null || split === undefined ? "" : Hadrons.describeSplit(split);
+    },
+    laitelaSpan() {
+      if (!this.measuredLaitela) return "";
+      const { settings, seconds } = this.lastRun;
+      return TimeSpan.fromSeconds(settings.laitelaSeconds * seconds / settings.seconds).toStringShort();
+    },
     // Progress is measured in simulated ticks, since later rungs run far fewer but much longer trials
     progressPercent() {
       return this.workTotal === 0 ? 0 : 100 * this.workDone / this.workTotal;
@@ -92,7 +126,17 @@ export default {
       handler(value) {
         Object.assign(GlyphSolver.settings, value, { excluded: [...value.excluded] });
       }
-    }
+    },
+    // Measuring Lai'tela is done to find the best Lai'tela loadout, so rank by it; stop ranking by it when turned off
+    "settings.laitela"(measure) {
+      const target = this.metrics.find(m => m.key === this.settings.target);
+      if (measure && !target?.laitela) this.settings.target = "laitelaProgress";
+      if (!measure && target?.laitela && !this.alsoHadrons) this.settings.target = "antimatter";
+    },
+    alsoHadrons(joint) {
+      if (joint && !this.targetChoices.some(m => m.key === this.settings.target)) this.settings.target = "antimatter";
+      if (!joint && this.targetMetric.laitela && !this.settings.laitela) this.settings.target = "antimatter";
+    },
   },
   beforeDestroy() {
     clearInterval(this.pollInterval);
@@ -109,6 +153,12 @@ export default {
       this.loadoutCount = GlyphSolver.loadoutCount;
       this.needsRestart = GlyphSolver.needsRestart;
       this.canForceRestart = PlayerProgress.realityUnlocked();
+      this.canMeasureLaitela = GlyphSolver.canMeasureLaitela;
+      this.hadronsAvailable = HadronSolver.unavailableReason === "";
+      this.combinedRunning = GlyphHadronSolver.status.running;
+      this.combinedReason = this.alsoHadrons ? GlyphHadronSolver.unavailableReason(this.settings.target) : "";
+      // Lai'tela metrics leave the Rank by list when Lai'tela cannot be measured, so the target must leave them too
+      if (!this.canMeasureLaitela && this.targetMetric.laitela) this.settings.target = "antimatter";
       const status = GlyphSolver.status;
       this.running = status.running;
       this.phase = status.phase;
@@ -137,7 +187,10 @@ export default {
       // The game UI does not update while trials run, so poll for progress until the solve finishes
       clearInterval(this.pollInterval);
       this.pollInterval = setInterval(() => this.update(), 250);
-      GlyphSolver.solve().finally(() => {
+      const solve = this.alsoHadrons
+        ? GlyphHadronSolver.solve({ target: this.settings.target, startWith: "glyphs" })
+        : GlyphSolver.solve();
+      solve.finally(() => {
         clearInterval(this.pollInterval);
         this.update();
       });
@@ -152,6 +205,17 @@ export default {
       }
       this.confirmApply = null;
       GlyphSolver.apply(result.counts);
+    },
+    // What Auto Lai'tela did in this loadout's trial
+    laitelaSummary(result) {
+      const laitela = result.values.laitela;
+      if (!laitela) return "";
+      const hadronized = laitela.hadronizes > 0 ? `, Hadronized ×${formatInt(laitela.hadronizes)}` : "";
+      if (laitela.outcome === "walled") {
+        return `walls at ${formatInt(laitela.dimensionsLeft)} Dimensions${hadronized}`;
+      }
+      if (laitela.outcome === "running") return `still destabilizing at the end${hadronized}`;
+      return `${laitela.note || "stopped"}${hadronized}`;
     },
     formatValue(metric, value) {
       if (metric.isTime) {
@@ -188,7 +252,7 @@ export default {
         :key="entry.type"
         class="o-primary-btn c-glyph-solver__type"
         :class="{ 'c-glyph-solver__type--off': entry.excluded }"
-        :disabled="running"
+        :disabled="busy"
         :title="typeTooltip(entry)"
         @click="toggleType(entry.type)"
       >
@@ -204,7 +268,7 @@ export default {
           type="number"
           min="1"
           class="c-glyph-solver__input"
-          :disabled="running"
+          :disabled="busy"
         >
         real seconds
       </label>
@@ -215,7 +279,7 @@ export default {
           type="number"
           min="1"
           class="c-glyph-solver__input"
-          :disabled="running"
+          :disabled="busy"
         >
         ticks, then the best {{ formatPercents(settings.keepFraction) }} at
         <input
@@ -223,7 +287,7 @@ export default {
           type="number"
           min="1"
           class="c-glyph-solver__input"
-          :disabled="running"
+          :disabled="busy"
         >
         ticks
       </label>
@@ -234,7 +298,7 @@ export default {
           type="number"
           min="1"
           class="c-glyph-solver__input"
-          :disabled="running"
+          :disabled="busy"
         >
         ticks
       </label>
@@ -245,7 +309,7 @@ export default {
           type="number"
           min="0"
           class="c-glyph-solver__input"
-          :disabled="running"
+          :disabled="busy"
         >
         at
         <input
@@ -253,7 +317,7 @@ export default {
           type="number"
           min="1"
           class="c-glyph-solver__input"
-          :disabled="running"
+          :disabled="busy"
         >
         ticks
       </label>
@@ -264,7 +328,7 @@ export default {
           class="o-primary-btn"
         >
           <option
-            v-for="metric in metrics"
+            v-for="metric in targetChoices"
             :key="metric.key"
             :value="metric.key"
           >
@@ -272,11 +336,36 @@ export default {
           </option>
         </select>
       </label>
+      <label v-if="canMeasureLaitela">
+        <input
+          v-model="settings.laitela"
+          type="checkbox"
+          :disabled="busy"
+        >
+        Measure Lai'tela: then run Auto Lai'tela for
+        <input
+          v-model.number="settings.laitelaSeconds"
+          type="number"
+          min="1"
+          class="c-glyph-solver__input"
+          :disabled="busy || !settings.laitela"
+        >
+        real seconds
+      </label>
+      <label v-if="hadronsAvailable">
+        <input
+          v-model="settings.alsoHadrons"
+          type="checkbox"
+          :disabled="busy"
+        >
+        Also choose the Hadron split: alternate with the Hadron Solver (its settings are on Lai'tela's tab) until
+        neither changes its pick
+      </label>
       <label>
         <input
           v-model="settings.useTimeFlow"
           type="checkbox"
-          :disabled="running"
+          :disabled="busy"
         >
         Include Overclock time flow
       </label>
@@ -284,7 +373,7 @@ export default {
         <input
           v-model="settings.exhaustive"
           type="checkbox"
-          :disabled="running"
+          :disabled="busy"
         >
         Exhaustive (slower; no quick screen)
       </label>
@@ -296,7 +385,7 @@ export default {
           min="0"
           :max="maxWorkers"
           class="c-glyph-solver__input"
-          :disabled="running"
+          :disabled="busy"
         >
         (0 runs on this page and pauses the game)
       </label>
@@ -304,7 +393,7 @@ export default {
         <input
           v-model="settings.forceRestart"
           type="checkbox"
-          :disabled="running"
+          :disabled="busy"
         >
         Always start from a restarted Reality
       </label>
@@ -337,21 +426,32 @@ export default {
     >
       {{ error }}
     </div>
+    <div
+      v-if="combinedReason && !unavailableReason"
+      class="c-glyph-solver__warning"
+    >
+      {{ combinedReason }}
+    </div>
 
     <button
       class="o-primary-btn c-glyph-solver__button"
-      :disabled="Boolean(unavailableReason) || running"
+      :disabled="Boolean(unavailableReason || combinedReason) || busy"
       @click="solve"
     >
-      Solve
+      {{ alsoHadrons ? "Solve Glyphs + Hadrons" : "Solve" }}
     </button>
+
+    <GlyphHadronSolverBox />
 
     <div
       v-if="lastRun"
       class="c-glyph-solver__results"
     >
       <div>
-        Simulated {{ simulatedSpan }} per loadout.
+        Simulated {{ simulatedSpan }} per loadout<span v-if="splitText"> at {{ splitText }}</span><span
+          v-if="measuredLaitela"
+        >, then up to {{ laitelaSpan }} of
+          Auto Lai'tela (destabilizing and Hadronizing while each run takes under {{ formatInt(30) }} seconds)</span>.
         <span v-if="lastRun.cancelled">Cancelled; partial results.</span>
       </div>
       <div class="c-glyph-solver__table-wrapper">
@@ -359,6 +459,9 @@ export default {
           <tr>
             <th>#</th>
             <th>Loadout</th>
+            <th v-if="measuredLaitela">
+              Lai'tela
+            </th>
             <th
               v-for="metric in columns"
               :key="metric.key"
@@ -376,6 +479,9 @@ export default {
             <td class="c-glyph-solver__loadout">
               {{ result.name }}
             </td>
+            <td v-if="measuredLaitela">
+              {{ laitelaSummary(result) }}
+            </td>
             <td
               v-for="metric in columns"
               :key="metric.key"
@@ -387,7 +493,7 @@ export default {
             <td>
               <button
                 class="o-primary-btn"
-                :disabled="Boolean(unavailableReason) || running"
+                :disabled="Boolean(unavailableReason) || busy"
                 @click="apply(result)"
               >
                 {{ confirmApply === result ? "Restart and equip?" : "Equip" }}
@@ -436,7 +542,7 @@ export default {
     </div>
 
     <div
-      v-if="running && !parallel"
+      v-if="running && !parallel && !combinedRunning"
       class="c-glyph-solver__overlay"
     >
       <div class="c-glyph-solver__overlay-box">

@@ -11,6 +11,7 @@
     "test:hadron-solver": "node tests/hadron-solver.cjs",
     "test:auto-laitela": "node tests/auto-laitela.cjs",
     "test:glyph-solver": "node tests/glyph-solver.cjs",
+    "test:glyph-hadron-solver": "node tests/glyph-hadron-solver.cjs",
     "test:ec-solver": "node tests/ec-solver.cjs",
     "test:ra-pulse": "node tests/ra-overclock-pulse.cjs",
     "test:ra-scaling": "node tests/ra-scaling.cjs"

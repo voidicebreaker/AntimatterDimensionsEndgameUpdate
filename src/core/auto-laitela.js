@@ -94,6 +94,68 @@ export const AutoLaitela = {
     }
   },
 
+  // Used by the solvers on throwaway copies of the save: runs Auto Lai'tela for up to the given simulated time,
+  // stopping as soon as it gives up, and reports how far it got. Resolves to null if the solve was cancelled.
+  async simulate({ seconds, ticks, isCancelled }) {
+    // Auto Lai'tela refuses to start alongside the EC scheduler, and both would fight over Realities
+    if (ECScheduler.isRunning) ECScheduler.data.running = false;
+    this.stop("");
+    const startTier = Laitela.difficultyTier;
+    const startHadronizes = Laitela.hadronizes;
+    let time = 0;
+    // "running" if still destabilizing at the end, "walled" if a run became too slow, otherwise "stopped" with a note
+    let outcome = "stopped";
+    let note = "";
+    this.allowInSimulation = true;
+    try {
+      this.start();
+      if (this.isActive) {
+        const result = await SolverHarness.runTicks({
+          seconds,
+          ticks,
+          // Uniform ticks: the 30 second rule runs on real time, which the Black Hole stepper would lump into a
+          // handful of huge ticks
+          uniform: true,
+          onStep: fraction => {
+            time = seconds * fraction;
+            return !this.isActive;
+          },
+          isCancelled,
+        });
+        if (result === "cancelled") return null;
+        if (this.isActive) {
+          outcome = "running";
+        } else if (Laitela.isRunning || player.celestials.laitela.thisCompletion >= DESTABILIZE_SECONDS) {
+          // Auto Lai'tela leaves the player in a run once it passes 30 seconds, or stops after one that took that long
+          outcome = "walled";
+        } else {
+          note = this.status.replace(/^Stopped: /u, "");
+        }
+      } else {
+        note = `Auto Lai'tela could not start: ${this.unavailableReason}`;
+      }
+    } finally {
+      this.allowInSimulation = false;
+      this.stop("");
+    }
+    const hadronizes = Laitela.hadronizes - startHadronizes;
+    const entropy = player.celestials.laitela.entropy;
+    return {
+      outcome,
+      note,
+      time,
+      hadronizes,
+      progress: 8 * hadronizes + Laitela.difficultyTier - startTier,
+      // How far the run it stopped in got toward destabilizing, from 0 to 1, which separates loadouts that wall at the
+      // same Dimension count
+      entropy: Laitela.isRunning && entropy.gte(0) ? Math.clamp(entropy.toNumber(), 0, 0.999) : 0,
+      dimensionsLeft: Laitela.maxAllowedDimension,
+      // What the run it stopped in needed, against what it reached, to show how far a walled run is from the wall
+      antimatterNeeded: Laitela.antimatterNeededToDestabilize,
+      antimatterReached: Currency.antimatter.value,
+    };
+  },
+
   startNextRun() {
     if (Laitela.isFullyDestabilized) {
       if (!this.canHadronize) {

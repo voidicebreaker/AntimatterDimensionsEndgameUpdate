@@ -117,6 +117,66 @@ const { chromium } = require("playwright-core");
       const restoredEquipped = sameSave(equippedSave, GameSaveSerializer.serialize(player));
       check(restoredEquipped.same, `The equipped save is restored after a restarted solve ${restoredEquipped.paths}`);
 
+      // Ranking by Lai'tela: further is better, and among equally far loadouts the faster one wins
+      const fake = (name, progress, time) => ({ name, ticks: 1,
+        values: { laitelaProgress: new Decimal(progress), laitelaTime: time } });
+      const laitelaOrder = rankGlyphSolverResults([fake("slow", 3, 50), fake("short", 2.5, 1), fake("fast", 3, 20),
+        fake("none", 0.1, null)], "laitelaProgress").map(r => r.name).join(",");
+      check(laitelaOrder === "fast,slow,short,none", `Lai'tela ranking uses time as its tie-break (${laitelaOrder})`);
+
+      Object.assign(GlyphSolver.settings, { laitela: true, target: "laitelaProgress" });
+      const lockedSettings = GlyphSolver.solveSettings();
+      check(!GlyphSolver.canMeasureLaitela && lockedSettings.laitela === false,
+        "Lai'tela is never measured before it is unlocked, even with the option on");
+      check(lockedSettings.target === "antimatter",
+        "A Lai'tela target falls back to Antimatter when Lai'tela cannot be measured");
+      player.reality.imaginaryUpgradeBits |= 1 << 15;
+      check(GlyphSolver.canMeasureLaitela, "Lai'tela can be measured once it is unlocked");
+      // A real trial on this fresh save: Auto Lai'tela walls in its first run, which the trial reports and stops at
+      Object.assign(GlyphSolver.settings, { laitela: true, laitelaSeconds: 60, useTimeFlow: false });
+      const laitelaOptions = GlyphSolver.laitelaOptions(GlyphSolver.solveSettings());
+      check(laitelaOptions.ticks === 20 && laitelaOptions.seconds === 60,
+        "The Lai'tela phase is simulated at ten ticks per 30 seconds");
+      check(GlyphSolver.restartWithoutGlyphs(), "Glyphs equipped by earlier checks are unequipped for the trial");
+      const laitelaBase = GameSaveSerializer.serialize(player);
+      SolverHarness.isSimulating = true;
+      let trials;
+      try {
+        const options = { seconds: 5, realSeconds: 5, ticks: 4, laitela: laitelaOptions };
+        const counts = GlyphSolver.loadouts()[0];
+        trials = [await GlyphSolver.runTrial(laitelaBase, counts, options),
+          await GlyphSolver.runTrial(laitelaBase, counts, options)];
+      } finally {
+        SolverHarness.isSimulating = false;
+      }
+      const [trial, repeat] = trials;
+      check(trial.laitela.outcome === "walled" && trial.laitela.dimensionsLeft === 8,
+        "A loadout that cannot destabilize is reported as walling at 8 Dimensions");
+      check(trial.laitelaProgress instanceof Decimal && trial.laitelaProgress.lt(1) && trial.laitelaTime === null,
+        "Walling at once scores only the entropy of that run, with no Lai'tela time");
+      check(trial.laitelaProgress.eq(repeat.laitelaProgress) && trial.antimatter.eq(repeat.antimatter),
+        "Lai'tela trials of the same loadout are deterministic");
+      check(!AutoLaitela.isActive && !AutoLaitela.allowInSimulation, "Trials leave Auto Lai'tela off afterwards");
+
+      // A whole solve measuring Lai'tela on the page, which must put Auto Lai'tela's own state back
+      GameStorage.loadPlayerObject(GameSaveSerializer.deserialize(GameSaveSerializer.serialize(player)));
+      GameIntervals.stop();
+      const laitelaBefore = GameSaveSerializer.serialize(player);
+      AutoLaitela.status = "Player status";
+      Object.assign(GlyphSolver.settings, { seconds: 5, screenTicks: 4, refineTicks: 8, refineCount: 2,
+        target: "laitelaProgress", workers: 0, exhaustive: true });
+      await GlyphSolver.solve();
+      const laitelaRun = GlyphSolver.status.lastRun;
+      check(!GlyphSolver.status.error, `Lai'tela solve finished without error ${GlyphSolver.status.error}`);
+      check(laitelaRun.settings.laitela && laitelaRun.results.length === 20 &&
+        laitelaRun.results.every(r => r.values.laitela && r.values.laitelaProgress instanceof Decimal),
+      "Every loadout of a Lai'tela solve reports its Lai'tela outcome");
+      const restoredLaitela = sameSave(laitelaBefore, GameSaveSerializer.serialize(player));
+      check(restoredLaitela.same, `The save is restored exactly after a Lai'tela solve ${restoredLaitela.paths}`);
+      check(AutoLaitela.status === "Player status" && !AutoLaitela.isActive,
+        "Auto Lai'tela's own state is put back after solving on the page");
+      Object.assign(GlyphSolver.settings, { laitela: false, target: "antimatter" });
+
       Currency.antimatter.value = new Decimal(1e10);
       const amBefore = Currency.antimatter.value;
       simulateTime(20, false, true);

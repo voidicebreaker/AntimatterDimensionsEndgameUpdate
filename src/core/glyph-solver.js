@@ -12,6 +12,35 @@ const TYPE_LETTERS = {
 const decimalMetric = (key, name, getter) => ({ key, name, value: getter, lowerIsBetter: false });
 const timeMetric = (key, name) => ({ key, name, value: run => run.milestones[key], lowerIsBetter: true, isTime: true });
 
+// Lai'tela's Reality destabilizes when a run completes within 30 seconds of real time, so the Lai'tela phase of a trial
+// is simulated with this many ticks per 30 seconds. Coarser ticks misjudge that limit, and save little time, since a
+// trial stops as soon as Auto Lai'tela walls.
+const LAITELA_WINDOW_SECONDS = 30;
+const LAITELA_TICKS_PER_WINDOW = 10;
+const MAX_LAITELA_TICKS = 20000;
+
+// Only measured when "Measure Lai'tela" is on; they come from running Auto Lai'tela after the normal span
+export const GLYPH_SOLVER_LAITELA_METRICS = [
+  {
+    key: "laitelaProgress",
+    name: "Lai'tela progress (Dimensions destabilized)",
+    // Whole destabilizations, plus how far the run it stopped in got, so loadouts walling at the same point still rank
+    value: run => (run.laitela ? run.laitela.progress + run.laitela.entropy : 0),
+    lowerIsBetter: false,
+    laitela: true,
+    // Among loadouts that destabilize equally far, the one that gets there sooner is better
+    tieBreak: "laitelaTime",
+  },
+  {
+    key: "laitelaTime",
+    name: "Lai'tela time used",
+    value: run => (run.laitela && run.laitela.progress > 0 ? run.laitela.realTime : null),
+    lowerIsBetter: true,
+    isTime: true,
+    laitela: true,
+  },
+];
+
 export const GLYPH_SOLVER_METRICS = [
   decimalMetric("antimatter", "Antimatter", () => Currency.antimatter.value),
   decimalMetric("ip", "Infinity Points", () => Currency.infinityPoints.value),
@@ -48,6 +77,7 @@ export const GLYPH_SOLVER_METRICS = [
   timeMetric("firstInfinity", "Time to Infinity"),
   timeMetric("firstEternity", "Time to Eternity"),
   timeMetric("firstReality", "Time to Reality"),
+  ...GLYPH_SOLVER_LAITELA_METRICS,
 ];
 
 function readMetric(metric, run) {
@@ -71,6 +101,19 @@ export function compareGlyphSolverMetric(metric, a, b) {
   return Decimal.compare(a, b);
 }
 
+// Compares by the metric, then by its tie-break metric if it has one
+function compareWithTieBreak(metric, a, b) {
+  const order = compareGlyphSolverMetric(metric, a.values[metric.key], b.values[metric.key]);
+  if (order !== 0 || !metric.tieBreak) return order;
+  const tieBreak = GLYPH_SOLVER_METRICS.find(m => m.key === metric.tieBreak);
+  return compareGlyphSolverMetric(tieBreak, a.values[tieBreak.key], b.values[tieBreak.key]);
+}
+
+export function rankGlyphSolverResults(results, target, byAccuracy = false) {
+  const metric = GLYPH_SOLVER_METRICS.find(m => m.key === target) ?? GLYPH_SOLVER_METRICS[0];
+  return [...results].sort((a, b) => (byAccuracy ? b.ticks - a.ticks : 0) || compareWithTieBreak(metric, b, a));
+}
+
 const glyphPower = glyph => new Decimal(glyph.level).times(glyph.strength);
 const sameGlyph = (a, b) => new Decimal(a.level).eq(b.level) && a.strength === b.strength && a.effects === b.effects;
 
@@ -91,6 +134,11 @@ export const GlyphSolver = {
     // Web Workers to run trials on; 0 runs them on the page itself, pausing the game
     workers: SolverPool.defaultSize,
     target: "antimatter",
+    // After the normal span, run Auto Lai'tela for this long (real seconds) to see how far each loadout destabilizes it
+    laitela: false,
+    laitelaSeconds: 120,
+    // Alternate with the Hadron Solver to choose the Hadron split as well (see GlyphHadronSolver)
+    alsoHadrons: false,
     useTimeFlow: true,
     forceRestart: false,
     excluded: [],
@@ -125,6 +173,24 @@ export const GlyphSolver = {
     }
     if (this.loadoutCount === 0) return "None of the allowed Glyph types are in your inventory.";
     return "";
+  },
+
+  get canMeasureLaitela() {
+    return Laitela.isUnlocked && !Pelle.isDoomed && !Slabdrill.isCursed && !player.disablePostReality;
+  },
+
+  get measuresLaitela() {
+    return this.settings.laitela && this.canMeasureLaitela;
+  },
+
+  // The simulated span and resolution of a trial's Lai'tela phase, or null if Lai'tela is not measured
+  laitelaOptions(settings) {
+    if (!settings.laitela) return null;
+    const flow = settings.useTimeFlow ? Overclock.timeFlow : 1;
+    const tickSeconds = LAITELA_WINDOW_SECONDS / LAITELA_TICKS_PER_WINDOW;
+    const ticks = Math.clamp(Math.ceil(settings.laitelaSeconds * flow / tickSeconds), 1, MAX_LAITELA_TICKS);
+    // Ticks keep their length when capped, so a capped trial covers less time rather than becoming coarser
+    return { seconds: ticks * tickSeconds, realSeconds: ticks * tickSeconds / flow, ticks };
   },
 
   get companionSlots() {
@@ -283,7 +349,7 @@ export const GlyphSolver = {
     EventHub.dispatch(GAME_EVENT.GLYPHS_CHANGED);
   },
 
-  async runTrial(base, counts, { seconds, realSeconds, ticks }) {
+  async runTrial(base, counts, { seconds, realSeconds, ticks, laitela = null }) {
     SolverHarness.restoreTrial(base);
     this.equipLoadout(counts);
     player.reality.respec = false;
@@ -308,23 +374,36 @@ export const GlyphSolver = {
       });
       if (outcome === "cancelled") return null;
       const values = {};
-      for (const metric of GLYPH_SOLVER_METRICS) values[metric.key] = readMetric(metric, run);
+      // Read before the Lai'tela phase, whose Realities would change what the run looks like
+      for (const metric of GLYPH_SOLVER_METRICS) {
+        if (!metric.laitela) values[metric.key] = readMetric(metric, run);
+      }
+      EventHub.logic.offAll(this);
+      if (laitela) {
+        const result = await AutoLaitela.simulate({ ...laitela, isCancelled: () => this.status.cancelRequested });
+        if (result === null) return null;
+        run.laitela = { ...result, realTime: result.time * laitela.realSeconds / laitela.seconds };
+        values.laitela = {
+          outcome: result.outcome,
+          note: result.note,
+          dimensionsLeft: result.dimensionsLeft,
+          hadronizes: result.hadronizes,
+        };
+      }
+      for (const metric of GLYPH_SOLVER_LAITELA_METRICS) values[metric.key] = readMetric(metric, run);
       return values;
     } finally {
       EventHub.logic.offAll(this);
     }
   },
 
-  rank(results) {
-    const metric = GLYPH_SOLVER_METRICS.find(m => m.key === this.settings.target) ?? GLYPH_SOLVER_METRICS[0];
-    return [...results].sort((a, b) => compareGlyphSolverMetric(metric, b.values[metric.key], a.values[metric.key]));
+  rank(results, target = this.settings.target) {
+    return rankGlyphSolverResults(results, target);
   },
 
   // The order every result list is shown in: the most accurate runs first, then by the target metric
-  rankByAccuracy(results) {
-    const metric = GLYPH_SOLVER_METRICS.find(m => m.key === this.settings.target) ?? GLYPH_SOLVER_METRICS[0];
-    return [...results].sort((a, b) => b.ticks - a.ticks ||
-      compareGlyphSolverMetric(metric, b.values[metric.key], a.values[metric.key]));
+  rankByAccuracy(results, target = this.settings.target) {
+    return rankGlyphSolverResults(results, target, true);
   },
 
   // The accuracy steps of a solve. Successive halving screens every loadout quickly and spends the saved time on the
@@ -343,14 +422,45 @@ export const GlyphSolver = {
     ];
   },
 
+  // A snapshot of the settings for one solve; Lai'tela is only measured where it can be entered
+  // Overrides come from the Glyphs + Hadrons search: a target, Lai'tela measurement, and the Hadron split to solve at
+  solveSettings(overrides = {}) {
+    const settings = { ...this.settings, excluded: [...this.settings.excluded], split: null, ...overrides };
+    const laitela = settings.laitela && this.canMeasureLaitela;
+    // A Lai'tela target with Lai'tela unmeasured (such as after entering a run where it cannot be entered) would score
+    // every loadout 0, so the screening rounds would keep loadouts in arbitrary order
+    const target = GLYPH_SOLVER_METRICS.find(m => m.key === settings.target);
+    return { ...settings, laitela, target: target?.laitela && !laitela ? "antimatter" : settings.target };
+  },
+
+  // Turns the live save into the state every trial starts from: at the requested Hadron split (switching it with its
+  // usual reset), with every slot empty
+  prepareBase({ split = null } = {}) {
+    if (split !== null && split !== Hadrons.split && !Hadrons.setSplit(split)) {
+      throw new Error(`Could not switch to ${Hadrons.describeSplit(split)}.`);
+    }
+    if (this.needsRestart && !this.restartWithoutGlyphs()) {
+      throw new Error("There is no inventory space to unequip your current Glyphs.");
+    }
+  },
+
+  trialOptions(settings, seconds, rung) {
+    return {
+      seconds,
+      realSeconds: settings.seconds,
+      ticks: rung.ticks,
+      laitela: this.laitelaOptions(settings),
+    };
+  },
+
   get canUseWorkers() {
     return SolverPool.isSupported && this.settings.workers > 0;
   },
 
-  async solve() {
+  async solve(overrides = {}) {
     if (this.status.running || SolverHarness.isBusy || this.unavailableReason) return;
-    if (this.canUseWorkers) await this.solveParallel();
-    else await this.solveSingleThread();
+    if (this.canUseWorkers) await this.solveParallel(overrides);
+    else await this.solveSingleThread(overrides);
   },
 
   startStatus(fields) {
@@ -367,7 +477,7 @@ export const GlyphSolver = {
       seconds,
       cancelled: this.status.cancelRequested,
       pool: pool.map(p => ({ type: p.type, letter: p.letter, cap: p.cap, owned: p.owned, isUniform: p.isUniform })),
-      results: this.rankByAccuracy(results),
+      results: this.rankByAccuracy(results, settings.target),
       finishedAt: Date.now(),
     });
     this.status.running = false;
@@ -375,7 +485,7 @@ export const GlyphSolver = {
   },
 
   // Runs the trials of each rung, keeping the best of one rung as the candidates of the next
-  async runRungs({ rungs, loadouts, results, runRung }) {
+  async runRungs({ settings, rungs, loadouts, results, runRung }) {
     let candidates = loadouts;
     for (const [index, rung] of rungs.entries()) {
       this.status.phase = rung.label;
@@ -389,13 +499,13 @@ export const GlyphSolver = {
       });
       if (this.status.cancelRequested) return;
       const next = rungs[index + 1];
-      if (next) candidates = this.rank(rungResults).slice(0, next.size).map(r => r.counts);
+      if (next) candidates = this.rank(rungResults, settings.target).slice(0, next.size).map(r => r.counts);
     }
   },
 
   // Trials run in Web Workers on copies of the save, so the live game keeps running and is never touched
-  async solveParallel() {
-    const settings = { ...this.settings, excluded: [...this.settings.excluded] };
+  async solveParallel(overrides) {
+    const settings = this.solveSettings(overrides);
     const pool = this.pool;
     const loadouts = this.loadouts(pool);
     const seconds = settings.seconds * (settings.useTimeFlow ? Overclock.timeFlow : 1);
@@ -407,24 +517,25 @@ export const GlyphSolver = {
 
     if (!await SolverPool.start(settings.workers)) {
       this.status.running = false;
-      await this.solveSingleThread();
+      await this.solveSingleThread(overrides);
       this.status.note = `Solved on the page instead: ${SolverPool.failure}`;
       return;
     }
     const results = new Map();
-    const solverSettings = { excluded: settings.excluded, forceRestart: settings.forceRestart };
+    const solverSettings = { excluded: settings.excluded, forceRestart: settings.forceRestart, split: settings.split };
     try {
       this.status.phase = "Preparing";
       const base = await SolverPool.single({ type: "prepare", kind: "glyph", original, settings: solverSettings });
       const seed = Math.floor(Math.random() * 2 ** 31) + 1;
       await SolverPool.broadcast({ type: "setBase", save: base, seed, settings: { glyph: solverSettings } });
       await this.runRungs({
+        settings,
         rungs,
         loadouts,
         results,
         runRung: (rung, candidates, onResult) => SolverPool.run(candidates, {
           message: counts => ({ type: "trial", kind: "glyph", choice: counts,
-            options: { seconds, realSeconds: settings.seconds, ticks: rung.ticks } }),
+            options: this.trialOptions(settings, seconds, rung) }),
           onResult,
           isCancelled: () => this.status.cancelRequested,
         }),
@@ -443,8 +554,8 @@ export const GlyphSolver = {
   },
 
   // Runs every trial on this page, pausing the live game; used when workers are unavailable or turned off
-  async solveSingleThread() {
-    const settings = { ...this.settings, excluded: [...this.settings.excluded] };
+  async solveSingleThread(overrides) {
+    const settings = this.solveSettings(overrides);
     const pool = this.pool;
     const loadouts = this.loadouts(pool);
     const seconds = settings.seconds * (settings.useTimeFlow ? Overclock.timeFlow : 1);
@@ -452,23 +563,25 @@ export const GlyphSolver = {
 
     const session = SolverHarness.begin("glyphs");
     if (!session) return;
+    // Auto Lai'tela keeps its state outside the save, so Lai'tela trials would otherwise take over the player's own run
+    const autoLaitela = {
+      isActive: AutoLaitela.isActive, watching: AutoLaitela.watching, status: AutoLaitela.status, log: AutoLaitela.log
+    };
     this.startStatus({ total: rungs.reduce((sum, rung) => sum + rung.size, 0),
       workTotal: rungs.reduce((sum, rung) => sum + rung.size * rung.ticks, 0) });
     SolverHarness.trialSeed = Math.floor(Math.random() * 2 ** 31) + 1;
     const results = new Map();
     try {
-      if (this.needsRestart && !this.restartWithoutGlyphs()) {
-        throw new Error("There is no inventory space to unequip your current Glyphs.");
-      }
+      this.prepareBase(settings);
       const base = GameSaveSerializer.serialize(player);
       await this.runRungs({
+        settings,
         rungs,
         loadouts,
         results,
         runRung: async(rung, candidates, onResult) => {
           for (const counts of candidates) {
-            const values = await this.runTrial(base, counts,
-              { seconds, realSeconds: settings.seconds, ticks: rung.ticks });
+            const values = await this.runTrial(base, counts, this.trialOptions(settings, seconds, rung));
             if (values === null) return;
             onResult(counts, values);
           }
@@ -481,6 +594,7 @@ export const GlyphSolver = {
     } finally {
       const restoreError = SolverHarness.end(session);
       if (restoreError) this.status.error = restoreError;
+      Object.assign(AutoLaitela, autoLaitela);
       this.finishRun({ settings, seconds, pool, results: [...results.values()] });
     }
   },
