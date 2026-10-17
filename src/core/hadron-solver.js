@@ -23,7 +23,7 @@ const decimalMetric = (key, name, getter) => ({ key, name, value: getter, lowerI
 // Read once the rebuild phase ends, before Lai'tela's Reality changes what the run looks like
 const RESOURCE_METRICS = [
   decimalMetric("continuum", "Continuum multiplier", () => Laitela.matterExtraPurchaseFactor),
-  ...GLYPH_SOLVER_METRICS.filter(metric => !metric.isTime),
+  ...GLYPH_SOLVER_METRICS.filter(metric => !metric.isTime && !metric.laitela),
 ];
 
 export const HADRON_SOLVER_METRICS = [
@@ -152,56 +152,19 @@ export const HadronSolver = {
     const values = {};
     for (const metric of RESOURCE_METRICS) values[metric.key] = readMetric(metric);
 
-    const startTier = Laitela.difficultyTier;
-    const startHadronizes = Laitela.hadronizes;
-    let laitelaTime = 0;
-    // "running" if still destabilizing at the end, "walled" if a run became too slow, otherwise "stopped" with a note
-    let laitelaOutcome = "stopped";
-    let note = "";
-    AutoLaitela.allowInSimulation = true;
-    try {
-      AutoLaitela.start();
-      if (AutoLaitela.isActive) {
-        const outcome = await SolverHarness.runTicks({
-          seconds: laitelaSeconds,
-          ticks: laitelaTicks,
-          uniform: true,
-          onStep: fraction => {
-            laitelaTime = laitelaSeconds * fraction;
-            return !AutoLaitela.isActive;
-          },
-          isCancelled,
-        });
-        if (outcome === "cancelled") return null;
-        if (AutoLaitela.isActive) {
-          laitelaOutcome = "running";
-        } else if (Laitela.isRunning || player.celestials.laitela.thisCompletion >= 30) {
-          // Auto Lai'tela leaves the player in a run once it passes 30 seconds, or stops after one that took that long
-          laitelaOutcome = "walled";
-        } else {
-          note = AutoLaitela.status.replace(/^Stopped: /u, "");
-        }
-      } else {
-        note = `Auto Lai'tela could not start: ${AutoLaitela.unavailableReason}`;
-      }
-    } finally {
-      AutoLaitela.allowInSimulation = false;
-      AutoLaitela.stop("");
-    }
-    const hadronizes = Laitela.hadronizes - startHadronizes;
-    const run = { hadronizes, progress: 8 * hadronizes + Laitela.difficultyTier - startTier };
-    values.laitelaProgress = readMetric(HADRON_SOLVER_METRICS[0], run);
-    values.hadronizes = readMetric(HADRON_SOLVER_METRICS[1], run);
+    const laitela = await AutoLaitela.simulate({ seconds: laitelaSeconds, ticks: laitelaTicks, isCancelled });
+    if (laitela === null) return null;
+    values.laitelaProgress = readMetric(HADRON_SOLVER_METRICS[0], laitela);
+    values.hadronizes = readMetric(HADRON_SOLVER_METRICS[1], laitela);
     return {
       values,
       recoveredAt,
-      laitelaOutcome,
-      note,
-      laitelaTime,
-      dimensionsLeft: Laitela.maxAllowedDimension,
-      // What the run it stopped in needed, against what it reached, to show how far a walled split is from the wall
-      antimatterNeeded: Laitela.antimatterNeededToDestabilize,
-      antimatterReached: Currency.antimatter.value,
+      laitelaOutcome: laitela.outcome,
+      note: laitela.note,
+      laitelaTime: laitela.time,
+      dimensionsLeft: laitela.dimensionsLeft,
+      antimatterNeeded: laitela.antimatterNeeded,
+      antimatterReached: laitela.antimatterReached,
     };
   },
 

@@ -10,6 +10,7 @@ export default {
       loadoutCount: 0,
       needsRestart: false,
       canForceRestart: false,
+      canMeasureLaitela: false,
       settings: { ...GlyphSolver.settings },
       running: false,
       phase: "",
@@ -34,15 +35,21 @@ export default {
     metrics() {
       return GLYPH_SOLVER_METRICS;
     },
+    // Lai'tela metrics only mean something when the solve measures Lai'tela
+    targetChoices() {
+      const laitela = this.settings.laitela && this.canMeasureLaitela;
+      return this.metrics.filter(m => laitela || !m.laitela);
+    },
+    measuredLaitela() {
+      return Boolean(this.lastRun?.settings.laitela);
+    },
     targetMetric() {
       return this.metrics.find(m => m.key === this.settings.target) ?? this.metrics[0];
     },
     // The most accurate runs first, as only the contenders were re-run at higher accuracy
     rankedResults() {
       if (!this.lastRun) return [];
-      const metric = this.targetMetric;
-      return [...this.lastRun.results].sort((a, b) => b.ticks - a.ticks ||
-        compareGlyphSolverMetric(metric, b.values[metric.key], a.values[metric.key]));
+      return rankGlyphSolverResults(this.lastRun.results, this.settings.target, true);
     },
     visibleResults() {
       return this.showAll ? this.rankedResults : this.rankedResults.slice(0, 25);
@@ -73,6 +80,12 @@ export default {
     simulatedSpan() {
       return this.lastRun ? TimeSpan.fromSeconds(this.lastRun.seconds).toStringShort() : "";
     },
+    // In simulated time, like simulatedSpan, so it includes Overclock time flow when the solve did
+    laitelaSpan() {
+      if (!this.measuredLaitela) return "";
+      const { settings, seconds } = this.lastRun;
+      return TimeSpan.fromSeconds(settings.laitelaSeconds * seconds / settings.seconds).toStringShort();
+    },
     // Progress is measured in simulated ticks, since later rungs run far fewer but much longer trials
     progressPercent() {
       return this.workTotal === 0 ? 0 : 100 * this.workDone / this.workTotal;
@@ -92,7 +105,13 @@ export default {
       handler(value) {
         Object.assign(GlyphSolver.settings, value, { excluded: [...value.excluded] });
       }
-    }
+    },
+    // Measuring Lai'tela is done to find the best Lai'tela loadout, so rank by it; stop ranking by it when turned off
+    "settings.laitela"(measure) {
+      const target = this.metrics.find(m => m.key === this.settings.target);
+      if (measure && !target?.laitela) this.settings.target = "laitelaProgress";
+      if (!measure && target?.laitela) this.settings.target = "antimatter";
+    },
   },
   beforeDestroy() {
     clearInterval(this.pollInterval);
@@ -109,6 +128,7 @@ export default {
       this.loadoutCount = GlyphSolver.loadoutCount;
       this.needsRestart = GlyphSolver.needsRestart;
       this.canForceRestart = PlayerProgress.realityUnlocked();
+      this.canMeasureLaitela = GlyphSolver.canMeasureLaitela;
       const status = GlyphSolver.status;
       this.running = status.running;
       this.phase = status.phase;
@@ -152,6 +172,17 @@ export default {
       }
       this.confirmApply = null;
       GlyphSolver.apply(result.counts);
+    },
+    // What Auto Lai'tela did in this loadout's trial
+    laitelaSummary(result) {
+      const laitela = result.values.laitela;
+      if (!laitela) return "";
+      const hadronized = laitela.hadronizes > 0 ? `, Hadronized ×${formatInt(laitela.hadronizes)}` : "";
+      if (laitela.outcome === "walled") {
+        return `walls at ${formatInt(laitela.dimensionsLeft)} Dimensions${hadronized}`;
+      }
+      if (laitela.outcome === "running") return `still destabilizing at the end${hadronized}`;
+      return `${laitela.note || "stopped"}${hadronized}`;
     },
     formatValue(metric, value) {
       if (metric.isTime) {
@@ -264,13 +295,29 @@ export default {
           class="o-primary-btn"
         >
           <option
-            v-for="metric in metrics"
+            v-for="metric in targetChoices"
             :key="metric.key"
             :value="metric.key"
           >
             {{ metric.name }}
           </option>
         </select>
+      </label>
+      <label v-if="canMeasureLaitela">
+        <input
+          v-model="settings.laitela"
+          type="checkbox"
+          :disabled="running"
+        >
+        Measure Lai'tela: then run Auto Lai'tela for
+        <input
+          v-model.number="settings.laitelaSeconds"
+          type="number"
+          min="1"
+          class="c-glyph-solver__input"
+          :disabled="running || !settings.laitela"
+        >
+        real seconds
       </label>
       <label>
         <input
@@ -351,7 +398,8 @@ export default {
       class="c-glyph-solver__results"
     >
       <div>
-        Simulated {{ simulatedSpan }} per loadout.
+        Simulated {{ simulatedSpan }} per loadout<span v-if="measuredLaitela">, then up to {{ laitelaSpan }} of
+          Auto Lai'tela (destabilizing and Hadronizing while each run takes under {{ formatInt(30) }} seconds)</span>.
         <span v-if="lastRun.cancelled">Cancelled; partial results.</span>
       </div>
       <div class="c-glyph-solver__table-wrapper">
@@ -359,6 +407,9 @@ export default {
           <tr>
             <th>#</th>
             <th>Loadout</th>
+            <th v-if="measuredLaitela">
+              Lai'tela
+            </th>
             <th
               v-for="metric in columns"
               :key="metric.key"
@@ -375,6 +426,9 @@ export default {
             <td>{{ formatInt(index + 1) }}</td>
             <td class="c-glyph-solver__loadout">
               {{ result.name }}
+            </td>
+            <td v-if="measuredLaitela">
+              {{ laitelaSummary(result) }}
             </td>
             <td
               v-for="metric in columns"
