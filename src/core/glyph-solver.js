@@ -137,6 +137,8 @@ export const GlyphSolver = {
     // After the normal span, run Auto Lai'tela for this long (real seconds) to see how far each loadout destabilizes it
     laitela: false,
     laitelaSeconds: 120,
+    // Alternate with the Hadron Solver to choose the Hadron split as well (see GlyphHadronSolver)
+    alsoHadrons: false,
     useTimeFlow: true,
     forceRestart: false,
     excluded: [],
@@ -421,13 +423,25 @@ export const GlyphSolver = {
   },
 
   // A snapshot of the settings for one solve; Lai'tela is only measured where it can be entered
-  solveSettings() {
-    const laitela = this.measuresLaitela;
+  // Overrides come from the Glyphs + Hadrons search: a target, Lai'tela measurement, and the Hadron split to solve at
+  solveSettings(overrides = {}) {
+    const settings = { ...this.settings, excluded: [...this.settings.excluded], split: null, ...overrides };
+    const laitela = settings.laitela && this.canMeasureLaitela;
     // A Lai'tela target with Lai'tela unmeasured (such as after entering a run where it cannot be entered) would score
     // every loadout 0, so the screening rounds would keep loadouts in arbitrary order
-    const target = GLYPH_SOLVER_METRICS.find(m => m.key === this.settings.target);
-    return { ...this.settings, excluded: [...this.settings.excluded], laitela,
-      target: target?.laitela && !laitela ? "antimatter" : this.settings.target };
+    const target = GLYPH_SOLVER_METRICS.find(m => m.key === settings.target);
+    return { ...settings, laitela, target: target?.laitela && !laitela ? "antimatter" : settings.target };
+  },
+
+  // Turns the live save into the state every trial starts from: at the requested Hadron split (switching it with its
+  // usual reset), with every slot empty
+  prepareBase({ split = null } = {}) {
+    if (split !== null && split !== Hadrons.split && !Hadrons.setSplit(split)) {
+      throw new Error(`Could not switch to ${Hadrons.describeSplit(split)}.`);
+    }
+    if (this.needsRestart && !this.restartWithoutGlyphs()) {
+      throw new Error("There is no inventory space to unequip your current Glyphs.");
+    }
   },
 
   trialOptions(settings, seconds, rung) {
@@ -443,10 +457,10 @@ export const GlyphSolver = {
     return SolverPool.isSupported && this.settings.workers > 0;
   },
 
-  async solve() {
+  async solve(overrides = {}) {
     if (this.status.running || SolverHarness.isBusy || this.unavailableReason) return;
-    if (this.canUseWorkers) await this.solveParallel();
-    else await this.solveSingleThread();
+    if (this.canUseWorkers) await this.solveParallel(overrides);
+    else await this.solveSingleThread(overrides);
   },
 
   startStatus(fields) {
@@ -490,8 +504,8 @@ export const GlyphSolver = {
   },
 
   // Trials run in Web Workers on copies of the save, so the live game keeps running and is never touched
-  async solveParallel() {
-    const settings = this.solveSettings();
+  async solveParallel(overrides) {
+    const settings = this.solveSettings(overrides);
     const pool = this.pool;
     const loadouts = this.loadouts(pool);
     const seconds = settings.seconds * (settings.useTimeFlow ? Overclock.timeFlow : 1);
@@ -503,12 +517,12 @@ export const GlyphSolver = {
 
     if (!await SolverPool.start(settings.workers)) {
       this.status.running = false;
-      await this.solveSingleThread();
+      await this.solveSingleThread(overrides);
       this.status.note = `Solved on the page instead: ${SolverPool.failure}`;
       return;
     }
     const results = new Map();
-    const solverSettings = { excluded: settings.excluded, forceRestart: settings.forceRestart };
+    const solverSettings = { excluded: settings.excluded, forceRestart: settings.forceRestart, split: settings.split };
     try {
       this.status.phase = "Preparing";
       const base = await SolverPool.single({ type: "prepare", kind: "glyph", original, settings: solverSettings });
@@ -540,8 +554,8 @@ export const GlyphSolver = {
   },
 
   // Runs every trial on this page, pausing the live game; used when workers are unavailable or turned off
-  async solveSingleThread() {
-    const settings = this.solveSettings();
+  async solveSingleThread(overrides) {
+    const settings = this.solveSettings(overrides);
     const pool = this.pool;
     const loadouts = this.loadouts(pool);
     const seconds = settings.seconds * (settings.useTimeFlow ? Overclock.timeFlow : 1);
@@ -558,9 +572,7 @@ export const GlyphSolver = {
     SolverHarness.trialSeed = Math.floor(Math.random() * 2 ** 31) + 1;
     const results = new Map();
     try {
-      if (this.needsRestart && !this.restartWithoutGlyphs()) {
-        throw new Error("There is no inventory space to unequip your current Glyphs.");
-      }
+      this.prepareBase(settings);
       const base = GameSaveSerializer.serialize(player);
       await this.runRungs({
         settings,

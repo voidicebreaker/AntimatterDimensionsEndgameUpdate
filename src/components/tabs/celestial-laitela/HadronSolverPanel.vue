@@ -1,6 +1,11 @@
 <script>
+import GlyphHadronSolverBox from "@/components/tabs/glyph-solver/GlyphHadronSolverBox";
+
 export default {
   name: "HadronSolverPanel",
+  components: {
+    GlyphHadronSolverBox,
+  },
   data() {
     return {
       isOpen: false,
@@ -21,13 +26,27 @@ export default {
       error: "",
       lastRun: null,
       canApplyBest: false,
+      glyphsAvailable: false,
+      canMeasureLaitela: false,
+      combinedRunning: false,
+      combinedReason: "",
       confirmingApply: false,
       pollInterval: null,
     };
   },
   computed: {
+    alsoGlyphs() {
+      return this.settings.alsoGlyphs && this.glyphsAvailable;
+    },
+    // A joint search with the Glyph Solver can only rank by what both solvers record
     metrics() {
-      return HADRON_SOLVER_METRICS.map(metric => ({ key: metric.key, name: metric.name }));
+      const metrics = this.alsoGlyphs
+        ? GlyphHadronSolver.targets.filter(metric => this.canMeasureLaitela || !metric.laitela)
+        : HADRON_SOLVER_METRICS;
+      return metrics.map(metric => ({ key: metric.key, name: metric.name }));
+    },
+    busy() {
+      return this.running || this.combinedRunning;
     },
     targetName() {
       return this.metrics.find(metric => metric.key === this.settings.target)?.name ?? "";
@@ -56,7 +75,13 @@ export default {
       handler(value) {
         Object.assign(HadronSolver.settings, value);
       }
-    }
+    },
+    alsoGlyphs(joint) {
+      if (joint && !this.metrics.some(metric => metric.key === this.settings.target)) {
+        this.settings.target = this.metrics.some(metric => metric.key === "laitelaProgress")
+          ? "laitelaProgress" : "antimatter";
+      }
+    },
   },
   beforeDestroy() {
     clearInterval(this.pollInterval);
@@ -77,7 +102,11 @@ export default {
       this.note = status.note;
       this.error = status.error;
       this.lastRun = status.lastRun;
-      this.canApplyBest = HadronSolver.canApply(this.best, this.lastRun);
+      this.canApplyBest = HadronSolver.canApply(this.best, this.lastRun) && !this.combinedRunning;
+      this.glyphsAvailable = GlyphSolver.unavailableReason === "";
+      this.canMeasureLaitela = GlyphSolver.canMeasureLaitela;
+      this.combinedRunning = GlyphHadronSolver.status.running;
+      this.combinedReason = this.alsoGlyphs ? GlyphHadronSolver.unavailableReason(this.settings.target) : "";
       if (!this.canApplyBest) this.confirmingApply = false;
     },
     solve() {
@@ -85,7 +114,10 @@ export default {
       // The game UI does not update while trials run on the page, so poll for progress until the solve finishes
       clearInterval(this.pollInterval);
       this.pollInterval = setInterval(() => this.update(), 250);
-      HadronSolver.solve().finally(() => {
+      const solve = this.alsoGlyphs
+        ? GlyphHadronSolver.solve({ target: this.settings.target, startWith: "hadrons" })
+        : HadronSolver.solve();
+      solve.finally(() => {
         clearInterval(this.pollInterval);
         this.update();
       });
@@ -187,7 +219,7 @@ export default {
             type="number"
             min="1"
             class="c-hadron-solver__input"
-            :disabled="running"
+            :disabled="busy"
           >
           real seconds in
           <input
@@ -195,7 +227,7 @@ export default {
             type="number"
             min="1"
             class="c-hadron-solver__input"
-            :disabled="running"
+            :disabled="busy"
           >
           ticks
         </label>
@@ -206,7 +238,7 @@ export default {
             type="number"
             min="1"
             class="c-hadron-solver__input"
-            :disabled="running"
+            :disabled="busy"
           >
           real seconds
         </label>
@@ -214,7 +246,7 @@ export default {
           <input
             v-model="settings.freshEndgame"
             type="checkbox"
-            :disabled="running"
+            :disabled="busy"
           >
           Assume a fresh Endgame (Hadron effects start from zero)
         </label>
@@ -222,9 +254,18 @@ export default {
           <input
             v-model="settings.useTimeFlow"
             type="checkbox"
-            :disabled="running"
+            :disabled="busy"
           >
           Include Overclock time flow
+        </label>
+        <label v-if="glyphsAvailable">
+          <input
+            v-model="settings.alsoGlyphs"
+            type="checkbox"
+            :disabled="busy"
+          >
+          Also choose Glyphs: alternate with the Glyph Solver (its settings are on its tab) until neither changes its
+          pick
         </label>
         <label v-if="canUseWorkers">
           CPU workers
@@ -234,7 +275,7 @@ export default {
             min="0"
             :max="maxWorkers"
             class="c-hadron-solver__input"
-            :disabled="running"
+            :disabled="busy"
           >
           (0 runs on this page and pauses the game)
         </label>
@@ -258,6 +299,12 @@ export default {
       >
         {{ note }}
       </div>
+      <div
+        v-if="combinedReason && !unavailableReason"
+        class="c-hadron-solver__warning"
+      >
+        {{ combinedReason }}
+      </div>
 
       <div
         v-if="running && parallel"
@@ -276,11 +323,13 @@ export default {
 
       <button
         class="o-primary-btn"
-        :disabled="Boolean(unavailableReason) || running"
+        :disabled="Boolean(unavailableReason || combinedReason) || busy"
         @click="solve"
       >
-        Solve ({{ formatInt(choiceCount) }} splits)
+        {{ alsoGlyphs ? "Solve Glyphs + Hadrons" : `Solve (${formatInt(choiceCount)} splits)` }}
       </button>
+
+      <GlyphHadronSolverBox />
 
       <div
         v-if="best"
@@ -363,7 +412,7 @@ export default {
       </div>
 
       <div
-        v-if="running && !parallel"
+        v-if="running && !parallel && !combinedRunning"
         class="c-hadron-solver__overlay"
       >
         <div class="c-hadron-solver__overlay-box">

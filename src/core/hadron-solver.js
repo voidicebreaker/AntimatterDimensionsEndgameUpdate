@@ -56,6 +56,8 @@ export const HadronSolver = {
     // Web Workers to run trials on; 0 runs them on the page itself, pausing the game
     workers: SolverPool.defaultSize,
     target: "laitelaProgress",
+    // Alternate with the Glyph Solver to choose the Glyph loadout as well (see GlyphHadronSolver)
+    alsoGlyphs: false,
   },
   // Plain data for the UI to copy; results persist until the next run or a page reload
   status: {
@@ -97,14 +99,22 @@ export const HadronSolver = {
     const total = run?.total ?? Hadrons.hadrons.total;
     const current = run?.current ?? Hadrons.split;
     if (choice === HADRON_SOLVER_KEEP) {
-      return `${Hadrons.describeSplit(current, usesExotic, total)} (current, no reset)`;
+      // Trying a Glyph loadout restarts the Reality even when the split is kept
+      const note = run?.settings.loadout ? "current" : "current, no reset";
+      return `${Hadrons.describeSplit(current, usesExotic, total)} (${note})`;
     }
     return Hadrons.describeSplit(choice, usesExotic, total);
   },
 
-  // Turns the live save into the state every trial starts from
-  prepareBase() {
-    if (this.settings.freshEndgame) player.records.thisEndgame.realTime = 0;
+  // Turns the live save into the state every trial starts from. With a Glyph loadout to try (from the Glyphs + Hadrons
+  // search), every slot is emptied here and the loadout equipped in each trial after its switch, since switching after
+  // Divinity 3 restarts the Endgame, which replaces the Glyphs.
+  prepareBase(settings = this.settings) {
+    if (settings.freshEndgame) player.records.thisEndgame.realTime = 0;
+    if (settings.loadout && player.reality.glyphs.active.some(g => g.type !== "companion") &&
+        !GlyphSolver.restartWithoutGlyphs()) {
+      throw new Error("There is no inventory space to unequip your current Glyphs.");
+    }
     // Auto Lai'tela refuses to start alongside the EC scheduler, and both would fight over Realities
     if (ECScheduler.isRunning) ECScheduler.data.running = false;
     AutoLaitela.stop("");
@@ -118,10 +128,11 @@ export const HadronSolver = {
       rebuildTicks: settings.rebuildTicks,
       laitelaSeconds: laitelaSeconds * flow,
       laitelaTicks: Math.clampMax(Math.ceil(laitelaSeconds * flow * LAITELA_TICKS_PER_SECOND), MAX_LAITELA_TICKS),
+      loadout: settings.loadout ?? null,
     };
   },
 
-  async runTrial(base, choice, { rebuildSeconds, rebuildTicks, laitelaSeconds, laitelaTicks }) {
+  async runTrial(base, choice, { rebuildSeconds, rebuildTicks, laitelaSeconds, laitelaTicks, loadout = null }) {
     SolverHarness.restoreTrial(base);
     AutoLaitela.stop("");
     const isCancelled = () => this.status.cancelRequested;
@@ -129,6 +140,7 @@ export const HadronSolver = {
     if (choice !== HADRON_SOLVER_KEEP && !Hadrons.setSplit(choice)) {
       throw new Error(`Could not switch to ${Hadrons.describeSplit(choice)}.`);
     }
+    if (loadout) GlyphSolver.equipLoadout(loadout);
 
     // Seconds into the rebuild at which each resource got back to its value before switching, or null if it did not
     const recoveredAt = {};
@@ -168,16 +180,17 @@ export const HadronSolver = {
     };
   },
 
-  async solve() {
+  // Overrides come from the Glyphs + Hadrons search: a target and the Glyph loadout to try every split with
+  async solve(overrides = {}) {
     if (this.status.running || SolverHarness.isBusy || this.unavailableReason) return;
-    if (this.canUseWorkers) await this.solveParallel();
-    else await this.solveSingleThread();
+    if (this.canUseWorkers) await this.solveParallel(overrides);
+    else await this.solveSingleThread(overrides);
   },
 
   // Everything a solve needs that does not depend on where its trials run
-  solveContext() {
+  solveContext(overrides = {}) {
     return {
-      settings: { ...this.settings },
+      settings: { ...this.settings, loadout: null, ...overrides },
       choices: this.choices,
       usesExotic: Hadrons.usesExotic,
       total: Hadrons.hadrons.total,
@@ -201,7 +214,7 @@ export const HadronSolver = {
     this.status.phase = `Trying ${formatInt(choices.length)} splits`;
     await evaluate(choices, 1);
     if (this.status.cancelRequested || settings.confirmFactor <= 1) return;
-    const leaders = this.rank([...context.results.values()]).slice(0, settings.confirmCount);
+    const leaders = this.rank([...context.results.values()], settings.target).slice(0, settings.confirmCount);
     this.status.phase = `Confirming the best ${formatInt(leaders.length)}`;
     await evaluate(leaders.map(entry => entry.choice), settings.confirmFactor);
   },
@@ -213,14 +226,14 @@ export const HadronSolver = {
   },
 
   // Trials run in Web Workers on copies of the save, so the live game keeps running and is never touched
-  async solveParallel() {
-    const context = this.solveContext();
+  async solveParallel(overrides) {
+    const context = this.solveContext(overrides);
     const { settings } = context;
     const original = GameSaveSerializer.serialize(player);
     this.startStatus({ phase: "Starting workers", parallel: true, workers: settings.workers });
     if (!await SolverPool.start(settings.workers)) {
       this.status.running = false;
-      await this.solveSingleThread();
+      await this.solveSingleThread(overrides);
       this.status.note = `Solved on the page instead: ${SolverPool.failure}`;
       return;
     }
@@ -248,8 +261,8 @@ export const HadronSolver = {
   },
 
   // Runs every trial on this page, pausing the live game; used when workers are unavailable or turned off
-  async solveSingleThread() {
-    const context = this.solveContext();
+  async solveSingleThread(overrides) {
+    const context = this.solveContext(overrides);
     const { settings } = context;
     const session = SolverHarness.begin("hadron");
     if (!session) return;
@@ -260,7 +273,7 @@ export const HadronSolver = {
     this.startStatus({});
     SolverHarness.trialSeed = Math.floor(Math.random() * 2 ** 31) + 1;
     try {
-      this.prepareBase();
+      this.prepareBase(settings);
       const base = GameSaveSerializer.serialize(player);
       await this.runSearch(context, async(choices, factor) => {
         for (const choice of choices) {

@@ -32,13 +32,7 @@ const handlers = {
     const solver = solvers[kind];
     Object.assign(solver.settings, settings);
     SolverHarness.restoreTrial(original);
-    if (kind === "glyph") {
-      if (solver.needsRestart && !solver.restartWithoutGlyphs()) {
-        throw new Error("There is no inventory space to unequip your current Glyphs.");
-      }
-    } else {
-      solver.prepareBase();
-    }
+    solver.prepareBase(settings);
     return GameSaveSerializer.serialize(player);
   },
 
