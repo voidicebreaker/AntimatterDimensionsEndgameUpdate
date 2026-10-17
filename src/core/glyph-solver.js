@@ -395,13 +395,13 @@ export const GlyphSolver = {
     }
   },
 
-  rank(results) {
-    return rankGlyphSolverResults(results, this.settings.target);
+  rank(results, target = this.settings.target) {
+    return rankGlyphSolverResults(results, target);
   },
 
   // The order every result list is shown in: the most accurate runs first, then by the target metric
-  rankByAccuracy(results) {
-    return rankGlyphSolverResults(results, this.settings.target, true);
+  rankByAccuracy(results, target = this.settings.target) {
+    return rankGlyphSolverResults(results, target, true);
   },
 
   // The accuracy steps of a solve. Successive halving screens every loadout quickly and spends the saved time on the
@@ -422,7 +422,12 @@ export const GlyphSolver = {
 
   // A snapshot of the settings for one solve; Lai'tela is only measured where it can be entered
   solveSettings() {
-    return { ...this.settings, excluded: [...this.settings.excluded], laitela: this.measuresLaitela };
+    const laitela = this.measuresLaitela;
+    // A Lai'tela target with Lai'tela unmeasured (such as after entering a run where it cannot be entered) would score
+    // every loadout 0, so the screening rounds would keep loadouts in arbitrary order
+    const target = GLYPH_SOLVER_METRICS.find(m => m.key === this.settings.target);
+    return { ...this.settings, excluded: [...this.settings.excluded], laitela,
+      target: target?.laitela && !laitela ? "antimatter" : this.settings.target };
   },
 
   trialOptions(settings, seconds, rung) {
@@ -458,7 +463,7 @@ export const GlyphSolver = {
       seconds,
       cancelled: this.status.cancelRequested,
       pool: pool.map(p => ({ type: p.type, letter: p.letter, cap: p.cap, owned: p.owned, isUniform: p.isUniform })),
-      results: this.rankByAccuracy(results),
+      results: this.rankByAccuracy(results, settings.target),
       finishedAt: Date.now(),
     });
     this.status.running = false;
@@ -466,7 +471,7 @@ export const GlyphSolver = {
   },
 
   // Runs the trials of each rung, keeping the best of one rung as the candidates of the next
-  async runRungs({ rungs, loadouts, results, runRung }) {
+  async runRungs({ settings, rungs, loadouts, results, runRung }) {
     let candidates = loadouts;
     for (const [index, rung] of rungs.entries()) {
       this.status.phase = rung.label;
@@ -480,7 +485,7 @@ export const GlyphSolver = {
       });
       if (this.status.cancelRequested) return;
       const next = rungs[index + 1];
-      if (next) candidates = this.rank(rungResults).slice(0, next.size).map(r => r.counts);
+      if (next) candidates = this.rank(rungResults, settings.target).slice(0, next.size).map(r => r.counts);
     }
   },
 
@@ -510,6 +515,7 @@ export const GlyphSolver = {
       const seed = Math.floor(Math.random() * 2 ** 31) + 1;
       await SolverPool.broadcast({ type: "setBase", save: base, seed, settings: { glyph: solverSettings } });
       await this.runRungs({
+        settings,
         rungs,
         loadouts,
         results,
@@ -557,6 +563,7 @@ export const GlyphSolver = {
       }
       const base = GameSaveSerializer.serialize(player);
       await this.runRungs({
+        settings,
         rungs,
         loadouts,
         results,

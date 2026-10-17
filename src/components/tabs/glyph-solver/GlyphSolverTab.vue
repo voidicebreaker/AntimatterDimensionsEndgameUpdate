@@ -129,6 +129,8 @@ export default {
       this.needsRestart = GlyphSolver.needsRestart;
       this.canForceRestart = PlayerProgress.realityUnlocked();
       this.canMeasureLaitela = GlyphSolver.canMeasureLaitela;
+      // Lai'tela metrics leave the Rank by list when Lai'tela cannot be measured, so the target must leave them too
+      if (!this.canMeasureLaitela && this.targetMetric.laitela) this.settings.target = "antimatter";
       const status = GlyphSolver.status;
       this.running = status.running;
       this.phase = status.phase;

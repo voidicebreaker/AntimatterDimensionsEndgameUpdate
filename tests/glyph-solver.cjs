@@ -124,8 +124,12 @@ const { chromium } = require("playwright-core");
         fake("none", 0.1, null)], "laitelaProgress").map(r => r.name).join(",");
       check(laitelaOrder === "fast,slow,short,none", `Lai'tela ranking uses time as its tie-break (${laitelaOrder})`);
 
-      check(!GlyphSolver.canMeasureLaitela && GlyphSolver.solveSettings().laitela === false,
+      Object.assign(GlyphSolver.settings, { laitela: true, target: "laitelaProgress" });
+      const lockedSettings = GlyphSolver.solveSettings();
+      check(!GlyphSolver.canMeasureLaitela && lockedSettings.laitela === false,
         "Lai'tela is never measured before it is unlocked, even with the option on");
+      check(lockedSettings.target === "antimatter",
+        "A Lai'tela target falls back to Antimatter when Lai'tela cannot be measured");
       player.reality.imaginaryUpgradeBits |= 1 << 15;
       check(GlyphSolver.canMeasureLaitela, "Lai'tela can be measured once it is unlocked");
       // A real trial on this fresh save: Auto Lai'tela walls in its first run, which the trial reports and stops at
