@@ -257,10 +257,16 @@ The Overclock tab holds a set of permanent upgrades which make the whole game ru
 later parts of the game can be reached in a reasonable amount of real time.
 <br>
 <br>
-<b>Controls:</b> Turn Overclock on or off at any time. Boost adds a base ×5 to Time Flow and prestige gains;
-Turbo adds ×10. These settings are saved and apply to every purchased upgrade. Turning Overclock off returns
-all of its speed and gain multipliers to ×1 without losing purchases. Click a purchased upgrade to toggle
-just that upgrade. Individual settings survive reloads and master toggles.
+<b>Controls:</b> Turn Overclock on or off at any time. Normal adds no base bonus, Boost adds a base ×5 to Time Flow
+and prestige gains, and Turbo adds ×10. These settings are saved and apply to every purchased upgrade. Turning
+Overclock off returns all of its speed and gain multipliers to ×1 without losing purchases. Click a purchased
+upgrade to toggle just that upgrade. Individual settings survive reloads and master toggles.
+<br>
+<br>
+The Time Flow button switches Time Flow on, off, or off only inside Lai'tela's Reality. While Time Flow is off,
+time runs at its normal pace but every other Overclock bonus (prestige gains, Ra and Lai'tela boosts) still
+applies. Inside Lai'tela's Reality faster time only shortens the real-time window to destabilize, so "OFF in
+Lai'tela" is usually the best choice once you have the Lai'tela Overclocks.
 <br>
 <br>
 <b>Upgrade strength:</b> Each upgrade keeps 30% of its previous bonus above ×1. For example, ×5 becomes ×2.2,
@@ -287,9 +293,19 @@ Eternity Points, Reality Machines, Celestial Points, Celestial Infinity Points a
 enabled, and the master switch must be on.
 <br>
 <br>
-<b>Lai'tela:</b> Dark Reactor does not touch speed at all. Inside Lai'tela's Reality, Infinity and Eternity Points
-are no longer dilated, and Antimatter, Infinity and Time Dimension multipliers are raised to the power of 1.5, plus
-0.25 for every Dimension you have destabilized. Outside that Reality it does nothing.
+<b>Lai'tela:</b> Four Overclocks boost Lai'tela without touching speed at all.
+<br>
+Dark Reactor: inside Lai'tela's Reality, Infinity and Eternity Points are no longer dilated, and Antimatter,
+Infinity and Time Dimension multipliers are raised to the power of 1.5, plus 0.25 for every destabilized Dimension.
+<br>
+Entropy Catalyst: inside Lai'tela's Reality, Entropy and destabilization are measured against a 10 times smaller
+antimatter exponent, so Entropy grows up to 100 times faster, and its cap is 10 times higher.
+<br>
+Void Harvest: both rewards from Lai'tela's Reality, the Dark Matter and Dark Energy multipliers, are squared. This
+applies everywhere.
+<br>
+Continuum Overdrive: inside Lai'tela's Reality, Continuum gives Antimatter, Infinity and Time Dimensions 3 times as
+many purchases, plus 1 more time for every destabilized Dimension.
 <br>
 <br>
 Each Overclock can only be bought once and has a requirement which must be met before it can be bought. Overclocks

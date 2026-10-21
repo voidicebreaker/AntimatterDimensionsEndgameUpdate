@@ -358,8 +358,11 @@ window.player = {
   overclock: {
     enabled: true,
     power: 5,
+    timeFlowMode: "on",
     upgradeBits: 0,
     disabledUpgradeBits: 0,
+    upgradeBitsHigh: 0,
+    disabledUpgradeBitsHigh: 0,
     maxAchievements: 0,
     maxCelestials: 0
   },

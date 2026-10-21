@@ -63,7 +63,8 @@ export const ECScheduler = {
     return [EternityChallenges.completions, player.reality.upgradeBits, [...player.reality.perks].join(","),
       Glyphs.active.filter(Boolean).map(g => `${g.id}:${g.level}:${g.strength}`).join(","),
       player.overclock.enabled, player.overclock.power, player.overclock.upgradeBits,
-      player.overclock.disabledUpgradeBits, player.overclock.maxAchievements,
+      player.overclock.disabledUpgradeBits, player.overclock.upgradeBitsHigh,
+      player.overclock.disabledUpgradeBitsHigh, player.overclock.timeFlowMode, player.overclock.maxAchievements,
       player.overclock.maxCelestials].join(";");
   },
 

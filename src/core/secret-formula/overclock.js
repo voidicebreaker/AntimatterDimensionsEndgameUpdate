@@ -428,6 +428,49 @@ export const overclockUpgrades = [
     effect: () => Overclock.laitelaPower,
     formatEffect: value => (value > 1 ? formatPow(value, 2, 2) : "Inactive"),
   },
+  {
+    id: 33,
+    name: "Entropy Catalyst",
+    kind: "laitela",
+    requirement: "Unlock Lai'tela",
+    checkRequirement: () => Laitela.isUnlocked,
+    currency: () => Currency.realityMachines,
+    currencyName: "Reality Machine",
+    cost: 1e60,
+    description: () => `Inside Lai'tela's Reality, Entropy and destabilization need ${formatInt(10)} times less ` +
+      `of an antimatter exponent, which makes Entropy grow up to ${formatX(100)} faster, and the cap on ` +
+      `Entropy gain is ${formatX(10)} higher`,
+    effect: () => Overclock.entropyCatalyst,
+    formatEffect: value => (value > 1 ? `Antimatter exponent ÷${formatInt(value)}` : "Inactive"),
+  },
+  {
+    id: 34,
+    name: "Void Harvest",
+    kind: "laitela",
+    requirement: "Unlock Lai'tela",
+    checkRequirement: () => Laitela.isUnlocked,
+    currency: () => Currency.realityMachines,
+    currencyName: "Reality Machine",
+    cost: 1e70,
+    description: () => `Square both rewards from Lai'tela's Reality: the Dark Matter multiplier and the ` +
+      `Dark Energy multiplier. These rewards apply everywhere, not just inside the Reality`,
+    effect: () => Overclock.laitelaRewardPower,
+    formatEffect: value => formatPow(value),
+  },
+  {
+    id: 35,
+    name: "Continuum Overdrive",
+    kind: "laitela",
+    requirement: "Unlock Lai'tela",
+    checkRequirement: () => Laitela.isUnlocked,
+    currency: () => Currency.realityMachines,
+    currencyName: "Reality Machine",
+    cost: 1e80,
+    description: () => `Inside Lai'tela's Reality, Continuum gives Antimatter, Infinity and Time Dimensions ` +
+      `${formatX(3)} as many purchases, rising by ${formatInt(1)} for every destabilized Dimension`,
+    effect: () => Overclock.continuumOverdrive,
+    formatEffect: value => (value > 1 ? formatX(value) : "Inactive"),
+  },
 ].map(config => {
   // Scale the extra benefit once, after evaluating any dynamic growth or condition.
   // Interest and offline bonuses are scaled in Overclock because they depend on total Time Flow.

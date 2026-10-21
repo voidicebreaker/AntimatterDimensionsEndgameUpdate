@@ -434,7 +434,7 @@ class TimeDimensionState extends DimensionState {
     // It's safe to use dimension.currencyAmount because this is
     // a dimension-only method (so don't just copy it over to tickspeed).
     // We need to use dimension.currencyAmount here because of different costs in NC6.
-    return this.getContinuumValue.times(Laitela.matterExtraPurchaseFactor);
+    return this.getContinuumValue.times(Laitela.matterExtraPurchaseFactor).times(Overclock.continuumOverdrive);
   }
 
   get getContinuumValue() {

@@ -122,12 +122,15 @@ export const HadronSolver = {
 
   trialOptions(settings, laitelaFactor = 1) {
     const flow = settings.useTimeFlow ? Overclock.timeFlow : 1;
+    // Overclock can switch Time Flow off for Lai'tela's Reality alone
+    const laitelaFlow = settings.useTimeFlow ? Overclock.laitelaTimeFlow : 1;
     const laitelaSeconds = settings.laitelaSeconds * laitelaFactor;
     return {
       rebuildSeconds: settings.rebuildSeconds * flow,
       rebuildTicks: settings.rebuildTicks,
-      laitelaSeconds: laitelaSeconds * flow,
-      laitelaTicks: Math.clampMax(Math.ceil(laitelaSeconds * flow * LAITELA_TICKS_PER_SECOND), MAX_LAITELA_TICKS),
+      laitelaSeconds: laitelaSeconds * laitelaFlow,
+      laitelaTicks: Math.clampMax(Math.ceil(laitelaSeconds * laitelaFlow * LAITELA_TICKS_PER_SECOND),
+        MAX_LAITELA_TICKS),
       loadout: settings.loadout ?? null,
     };
   },

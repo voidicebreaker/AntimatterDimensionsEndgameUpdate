@@ -14,17 +14,32 @@ class OverclockUpgradeState extends BitPurchasableMechanicState {
     return this.config.currency();
   }
 
-  // Shifts in JS wrap at 32, so id 32 lives in bit 0 (no upgrade has id 0)
+  // Shifts in JS wrap at 32, so id 32 lives in bit 0 of the first field (no upgrade has id 0) and every later id
+  // continues in a second field
+  get usesHighBits() {
+    return this.id > 32;
+  }
+
   get bitIndex() {
-    return this.id % 32;
+    return this.usesHighBits ? this.id - 32 : this.id % 32;
   }
 
   get bits() {
-    return player.overclock.upgradeBits;
+    return this.usesHighBits ? player.overclock.upgradeBitsHigh : player.overclock.upgradeBits;
   }
 
   set bits(value) {
-    player.overclock.upgradeBits = value;
+    if (this.usesHighBits) player.overclock.upgradeBitsHigh = value;
+    else player.overclock.upgradeBits = value;
+  }
+
+  get disabledBits() {
+    return this.usesHighBits ? player.overclock.disabledUpgradeBitsHigh : player.overclock.disabledUpgradeBits;
+  }
+
+  set disabledBits(value) {
+    if (this.usesHighBits) player.overclock.disabledUpgradeBitsHigh = value;
+    else player.overclock.disabledUpgradeBits = value;
   }
 
   get isAvailableForPurchase() {
@@ -32,7 +47,7 @@ class OverclockUpgradeState extends BitPurchasableMechanicState {
   }
 
   get isEnabled() {
-    return this.isBought && (player.overclock.disabledUpgradeBits & (1 << this.bitIndex)) === 0;
+    return this.isBought && (this.disabledBits & (1 << this.bitIndex)) === 0;
   }
 
   get isEffectActive() {
@@ -41,8 +56,8 @@ class OverclockUpgradeState extends BitPurchasableMechanicState {
 
   setEnabled(enabled) {
     if (!this.isBought) return false;
-    if (enabled) player.overclock.disabledUpgradeBits &= ~(1 << this.bitIndex);
-    else player.overclock.disabledUpgradeBits |= (1 << this.bitIndex);
+    if (enabled) this.disabledBits &= ~(1 << this.bitIndex);
+    else this.disabledBits |= (1 << this.bitIndex);
     Overclock.invalidateMultipliers();
     GameUI.update();
     return true;
@@ -99,8 +114,10 @@ export const Overclock = {
     return player.overclock.enabled !== false;
   },
 
+  powers: [1, 5, 10],
+
   get power() {
-    return player.overclock.power === 10 ? 10 : 5;
+    return this.powers.includes(player.overclock.power) ? player.overclock.power : 5;
   },
 
   setEnabled(enabled) {
@@ -109,9 +126,28 @@ export const Overclock = {
   },
 
   setPower(power) {
-    if (power !== 5 && power !== 10) return;
+    if (!this.powers.includes(power)) return;
     player.overclock.power = power;
     this.invalidateMultipliers();
+  },
+
+  // Time Flow can be switched off on its own, which keeps every stat boost. "laitela" switches it off only inside
+  // Lai'tela's Reality, where faster time just shortens the destabilization window.
+  timeFlowModes: ["on", "laitela", "off"],
+
+  get timeFlowMode() {
+    return this.timeFlowModes.includes(player.overclock.timeFlowMode) ? player.overclock.timeFlowMode : "on";
+  },
+
+  setTimeFlowMode(mode) {
+    if (!this.timeFlowModes.includes(mode)) return;
+    player.overclock.timeFlowMode = mode;
+    this.invalidateMultipliers();
+  },
+
+  get isTimeFlowActive() {
+    const mode = this.timeFlowMode;
+    return mode === "on" || (mode === "laitela" && !Laitela.isRunning);
   },
 
   invalidateMultipliers() {
@@ -131,12 +167,17 @@ export const Overclock = {
    * @return {number}
    */
   get timeFlow() {
-    if (this.isDisabled) return 1;
+    if (this.isDisabled || !this.isTimeFlowActive) return 1;
     let flow = this.power;
     for (const upgrade of OverclockUpgrades.all) {
       if (upgrade.kind === "flow" && upgrade.isEffectActive) flow *= upgrade.effectValue;
     }
     return flow;
+  },
+
+  // The Time Flow which a run of Lai'tela's Reality will get, even when asked from outside of it
+  get laitelaTimeFlow() {
+    return this.timeFlowMode === "on" ? this.timeFlow : 1;
   },
 
   // Time Flow as applied to offline time and to catching up after the device was asleep
@@ -175,13 +216,32 @@ export const Overclock = {
     return this.scoreMultiplier * (OverclockUpgrade(18).isEffectActive ? this.interestMultiplier : 1);
   },
 
+  isActiveInLaitela(id) {
+    return OverclockUpgrade(id).isEffectActive && Laitela.isRunning;
+  },
+
   get isLaitelaReactorActive() {
-    return OverclockUpgrade(32).isEffectActive && Laitela.isRunning;
+    return this.isActiveInLaitela(32);
   },
 
   // Dark Reactor's power to Dimension multipliers grows as Lai'tela takes Dimensions away
   get laitelaPower() {
     return this.isLaitelaReactorActive ? 1.5 + 0.25 * Laitela.difficultyTier : 1;
+  },
+
+  // Entropy Catalyst divides the antimatter exponent which Entropy and destabilization are measured against
+  get entropyCatalyst() {
+    return this.isActiveInLaitela(33) ? 10 : 1;
+  },
+
+  // Void Harvest raises both rewards of Lai'tela's Reality, so it works outside of the Reality as well
+  get laitelaRewardPower() {
+    return OverclockUpgrade(34).isEffectActive ? 2 : 1;
+  },
+
+  // Continuum Overdrive multiplies the purchases Continuum gives Antimatter, Infinity and Time Dimensions
+  get continuumOverdrive() {
+    return this.isActiveInLaitela(35) ? 3 + Laitela.difficultyTier : 1;
   },
 
   // Achievements and Celestials get taken away by some resets, so the upgrades which count them use the highest

@@ -67,22 +67,25 @@ export const Laitela = {
     const currentLaitelaProgress = Decimal.clampMin(Decimal.pow(100, this.difficultyTier).times(
       Decimal.pow(new Decimal(360).div(player.celestials.laitela.fastestCompletion), 2)), 1);
     return Decimal.pow(currentLaitelaProgress, this.hadronizes + 1).times(Decimal.pow(
-      fullLaitelaCompletion, (this.hadronizes * (this.hadronizes + 1)) / 2)).powEffectOf(DualityUpgrade(28));
+      fullLaitelaCompletion, (this.hadronizes * (this.hadronizes + 1)) / 2)).powEffectOf(DualityUpgrade(28))
+      .pow(Overclock.laitelaRewardPower);
   },
   get realityRewardDE() {
     const fullDestabilization = this.isFullyDestabilized ? Decimal.pow(8, this.hadronizes + 1) : DC.D1;
-    return Decimal.pow(8, (this.hadronizes * (this.hadronizes + 1)) / 2).times(fullDestabilization).powEffectOf(DualityUpgrade(28));
+    return Decimal.pow(8, (this.hadronizes * (this.hadronizes + 1)) / 2).times(fullDestabilization).powEffectOf(DualityUpgrade(28))
+      .pow(Overclock.laitelaRewardPower);
   },
   // Note that entropy goes from 0 to 1, with 1 being completion
   get entropyGainPerSecond() {
-    const maxSpeed = (ExpansionPack.laitelaPack.isBought && !player.disablePostReality) ? 1000 : 100;
+    const maxSpeed = ((ExpansionPack.laitelaPack.isBought && !player.disablePostReality) ? 1000 : 100) *
+      Overclock.entropyCatalyst;
     const hadronizeBump = this.hadronizes > 0 ? 1e12 : 1;
     const extraHadronizeBoost = DC.D1.times(Hadrons.entropyFormulaBoost).times(
       DivinityMilestone.firstDivine.isReached ? Decimal.log10(player.records.bestEndgame.galaxies.max(1)) : 1)
       .times(Accelerators.potency.effectValue2).times(
       DivinityMilestone.finalRebirth.isReached && !player.disablePostReality ? Time.thisEndgameRealTime.totalMinutes.pow(3).add(1) : 1)
       .timesEffectsOf(ResurgenceUpgrade.entropySurge, EndgameMastery(201), SingularityMilestone.continuumEntropyMult).pow(
-      Achievements.powerConv(EndgameMastery(201).effectOrDefault(1)));
+      Achievements.powerConv(EndgameMastery(201).effectOrDefault(1))).times(Overclock.entropyCatalyst);
     const hadronizeAntimatter = Decimal.pow(1000, this.hadronizes).times(hadronizeBump).times(1e11).div(extraHadronizeBoost);
     return Decimal.clamp(Decimal.pow(new Decimal(Currency.antimatter.value.add(1).log10()).div(
       hadronizeAntimatter), 2), 0, maxSpeed).div(200);
@@ -94,7 +97,7 @@ export const Laitela = {
       .times(Accelerators.potency.effectValue2).times(
       DivinityMilestone.finalRebirth.isReached && !player.disablePostReality ? Time.thisEndgameRealTime.totalMinutes.pow(3).add(1) : 1)
       .timesEffectsOf(ResurgenceUpgrade.entropySurge, EndgameMastery(201), SingularityMilestone.continuumEntropyMult).pow(
-      Achievements.powerConv(EndgameMastery(201).effectOrDefault(1)));
+      Achievements.powerConv(EndgameMastery(201).effectOrDefault(1))).times(Overclock.entropyCatalyst);
     const hadrAM = Decimal.pow(1000, this.hadronizes).times(hadrBump).times(1e11).div(extraHadrBoost);
     const currRoot = (this.maxAllowedDimension === 0 ? DC.BEMAX : 8 / this.maxAllowedDimension);
     return Decimal.pow10(hadrAM).pow(Decimal.sqrt(20/3)).pow(currRoot);

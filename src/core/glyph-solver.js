@@ -186,7 +186,8 @@ export const GlyphSolver = {
   // The simulated span and resolution of a trial's Lai'tela phase, or null if Lai'tela is not measured
   laitelaOptions(settings) {
     if (!settings.laitela) return null;
-    const flow = settings.useTimeFlow ? Overclock.timeFlow : 1;
+    // Overclock can switch Time Flow off for Lai'tela's Reality alone
+    const flow = settings.useTimeFlow ? Overclock.laitelaTimeFlow : 1;
     const tickSeconds = LAITELA_WINDOW_SECONDS / LAITELA_TICKS_PER_WINDOW;
     const ticks = Math.clamp(Math.ceil(settings.laitelaSeconds * flow / tickSeconds), 1, MAX_LAITELA_TICKS);
     // Ticks keep their length when capped, so a capped trial covers less time rather than becoming coarser

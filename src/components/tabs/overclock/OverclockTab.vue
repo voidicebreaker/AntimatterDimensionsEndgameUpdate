@@ -20,15 +20,32 @@ export default {
       raChunkMultiplier: 1,
       raMemoryMultiplier: 1,
       hasRaSingularity: false,
-      hasDarkReactor: false,
-      isReactorActive: false,
+      timeFlowMode: "on",
+      isTimeFlowActive: true,
+      isInLaitela: false,
+      laitelaUpgradeNames: [],
       laitelaPower: 1,
+      entropyCatalyst: 1,
+      laitelaRewardPower: 1,
+      continuumOverdrive: 1,
     };
   },
   computed: {
     upgrades: () => OverclockUpgrades.all,
     total: () => OverclockUpgrades.all.length,
     rows: () => Math.ceil(OverclockUpgrades.all.length / 5),
+    powerSettings: () => [
+      { power: 1, label: "Normal" },
+      { power: 5, label: "Boost" },
+      { power: 10, label: "Turbo" },
+    ],
+    timeFlowModeText() {
+      switch (this.timeFlowMode) {
+        case "off": return "OFF";
+        case "laitela": return "OFF in Lai'tela";
+        default: return "ON";
+      }
+    },
     flowDisplay() {
       return formatX(this.timeFlow, 2, 2);
     },
@@ -52,9 +69,21 @@ export default {
       this.raChunkMultiplier = OverclockUpgrade(29).effectOrDefault(1);
       this.raMemoryMultiplier = OverclockUpgrade(30).effectOrDefault(1);
       this.hasRaSingularity = OverclockUpgrade(31).isEffectActive;
-      this.hasDarkReactor = OverclockUpgrade(32).isEffectActive;
-      this.isReactorActive = Overclock.isLaitelaReactorActive;
+      this.timeFlowMode = Overclock.timeFlowMode;
+      this.isTimeFlowActive = Overclock.isTimeFlowActive;
+      this.isInLaitela = Laitela.isRunning;
+      this.laitelaUpgradeNames = OverclockUpgrades.all
+        .filter(u => u.kind === "laitela" && u.isEffectActive)
+        .map(u => u.name);
       this.laitelaPower = Overclock.laitelaPower;
+      this.entropyCatalyst = Overclock.entropyCatalyst;
+      this.laitelaRewardPower = Overclock.laitelaRewardPower;
+      this.continuumOverdrive = Overclock.continuumOverdrive;
+    },
+    cycleTimeFlowMode() {
+      const modes = Overclock.timeFlowModes;
+      Overclock.setTimeFlowMode(modes[(modes.indexOf(this.timeFlowMode) + 1) % modes.length]);
+      this.update();
     },
     toggle() {
       Overclock.setEnabled(!this.isEnabled);
@@ -87,15 +116,22 @@ export default {
         Overclock: {{ isEnabled ? "ON" : "OFF" }}
       </button>
       <button
-        v-for="setting in [5, 10]"
-        :key="setting"
+        v-for="setting in powerSettings"
+        :key="setting.power"
         class="o-primary-btn"
-        :class="{ 'c-overclock-controls__selected': power === setting }"
-        :aria-pressed="String(power === setting)"
+        :class="{ 'c-overclock-controls__selected': power === setting.power }"
+        :aria-pressed="String(power === setting.power)"
         :disabled="isSpeedrun"
-        @click="setPower(setting)"
+        @click="setPower(setting.power)"
       >
-        {{ setting === 5 ? "Boost" : "Turbo" }} {{ formatX(setting) }}
+        {{ setting.label }} {{ formatX(setting.power) }}
+      </button>
+      <button
+        class="o-primary-btn"
+        :disabled="isSpeedrun"
+        @click="cycleTimeFlowMode"
+      >
+        Time Flow: {{ timeFlowModeText }}
       </button>
     </div>
     <div class="c-overclock-infotext">
@@ -105,16 +141,21 @@ export default {
       <span v-else-if="!isEnabled">
         Overclock is off. Your upgrades are kept; speed and gain bonuses are paused.
       </span>
+      <span v-else-if="!isTimeFlowActive">
+        Time Flow is off{{ timeFlowMode === "laitela" ? " inside Lai'tela's Reality" : "" }}, so time runs normally.
+        Every other Overclock bonus still applies.
+      </span>
       <span v-else>
         Every real second, {{ secondsDisplay }} in the game.
       </span>
       <br>
       Time Flow speeds up everything at once: production, autobuyers, and every mechanic which runs on real time.
+      Switch it off, or off only inside Lai'tela's Reality, to keep the stat boosts without the extra speed.
       <br>
       Shared prestige gain bonus: {{ formatX(scoreMultiplier, 2, 2) }} to IP, EP, RM, CP, CIP and CEP.
       Enabled Interest upgrades apply {{ formatPercents(0.3) }} of the bonus from {{ formatInt(5) }} times Time Flow.
       <br>
-      Boost and Turbo multiply both base speed and prestige gains before your purchased upgrades.
+      Normal, Boost and Turbo multiply both base speed and prestige gains before your purchased upgrades.
       <br>
       <template v-if="raUnlocked">
         Ra bonuses: {{ formatX(raChunkMultiplier) }} Memory Chunk gain and
@@ -126,12 +167,17 @@ export default {
           <br>
         </template>
       </template>
-      <template v-if="hasDarkReactor">
-        <span v-if="isReactorActive">
-          Dark Reactor: Dimension multipliers {{ formatPow(laitelaPower, 2, 2) }} and no Infinity or Eternity Point
-          dilation in this Lai'tela Reality.
-        </span>
-        <span v-else>Dark Reactor is idle until you enter Lai'tela's Reality.</span>
+      <template v-if="laitelaUpgradeNames.length > 0">
+        <template v-if="isInLaitela">
+          Lai'tela bonuses: Dimension multipliers {{ formatPow(laitelaPower, 2, 2) }},
+          Entropy antimatter exponent ÷{{ formatInt(entropyCatalyst) }},
+          Continuum purchases {{ formatX(continuumOverdrive) }},
+          Reality rewards {{ formatPow(laitelaRewardPower) }}.
+        </template>
+        <template v-else>
+          Lai'tela Overclocks ({{ laitelaUpgradeNames.join(", ") }}) work inside Lai'tela's Reality;
+          Void Harvest's reward boost applies everywhere.
+        </template>
         <br>
       </template>
       <span v-if="hasOffline">Night Shift applies {{ formatPercents(0.3) }} of the extra Time Flow speed offline.</span>
