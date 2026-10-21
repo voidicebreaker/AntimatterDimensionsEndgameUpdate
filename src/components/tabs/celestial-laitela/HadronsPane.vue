@@ -42,7 +42,8 @@ export default {
       return new Decimal(2).div(Hadrons.speedFactor).times(this.percentageCap).sub(this.hadronTimer);
     },
     effect5Time() {
-      return new Decimal(5).div(Hadrons.speedFactor).times(this.percentageCap).sub(this.hadronTimer);
+      // Shared with Duality Upgrade 25, which needs Dark Hadrons to be capped
+      return Hadrons.darkEmpowermentHours.sub(this.hadronTimer);
     },
     effect1Percent() {
       let fac = this.hadronTimer.times(100).times(4).times(Hadrons.speedFactor);

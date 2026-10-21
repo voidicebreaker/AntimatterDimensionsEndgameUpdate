@@ -293,9 +293,19 @@ export const dualityUpgrades = [
     name: "Polydimensional Production",
     id: 25,
     cost: new Decimal(1e20),
-    requirement: () => `Have ${formatInt(32)} fully empowered Dark Hadrons`,
+    requirement: () => {
+      const text = `Have ${formatInt(32)} fully empowered Dark Hadrons`;
+      if (DualityUpgrade(25).isAvailableForPurchase) return text;
+      const dark = Math.min(player.celestials.laitela.hadrons.dark, 32);
+      const left = Hadrons.darkEmpowermentHours.sub(Hadrons.timeFactor.div(100));
+      const timeText = left.lte(0)
+        ? "fully empowered"
+        : `${formatPercents(Hadrons.darkEmpowermentProgress.toNumber(), 1)} empowered, ` +
+          `${TimeSpan.fromHours(left).toStringShort()} left this Endgame`;
+      return `${text} (${formatInt(dark)}/${formatInt(32)} Dark Hadrons, ${timeText})`;
+    },
     hasFailed: () => false,
-    checkRequirement: () => player.celestials.laitela.hadrons.dark >= 32 && Hadrons.timeFactor.div(5).gte(100),
+    checkRequirement: () => player.celestials.laitela.hadrons.dark >= 32 && Hadrons.areDarkFullyEmpowered,
     checkEvent: GAME_EVENT.GAME_TICK_AFTER,
     description: "Unlock Hypercubes",
   },

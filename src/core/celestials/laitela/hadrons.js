@@ -56,6 +56,22 @@ export const Hadrons = {
       DivinityMilestone.finalRebirth.isReached && !player.disablePostReality ? 2 : 1).times(
       DivinityMilestone.ascendedSurge.isReached && !player.disablePostReality ? 4 : 1);
   },
+  // The highest percentage a Hadron effect can be empowered to; time counts at a square root above 100%
+  get empowermentCap() {
+    return (100 * Accelerators.emptiness.effectValue2 + EndgameMastery(251).effectOrDefault(0)) *
+      (DivinityMilestone.serpentPower.isReached ? 2 : 1);
+  },
+  // Hours of this Endgame which Dark Hadrons need to reach that cap, as shown on the Hadrons pane
+  get darkEmpowermentHours() {
+    const cap = this.empowermentCap;
+    return new Decimal(5).div(this.speedFactor).times((Math.pow(cap - 100, 2) + 100) / 100);
+  },
+  get darkEmpowermentProgress() {
+    return this.timeFactor.div(100).div(this.darkEmpowermentHours).min(1);
+  },
+  get areDarkFullyEmpowered() {
+    return this.timeFactor.div(100).gte(this.darkEmpowermentHours);
+  },
   get singularityMultiplier() {
     let time = this.timeFactor.times(4).times(this.speedFactor);
     time = time.gte(100) ? time.sub(100).sqrt().add(100) : time;
