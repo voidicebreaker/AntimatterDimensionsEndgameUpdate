@@ -287,6 +287,11 @@ Eternity Points, Reality Machines, Celestial Points, Celestial Infinity Points a
 enabled, and the master switch must be on.
 <br>
 <br>
+<b>Lai'tela:</b> Dark Reactor does not touch speed at all. Inside Lai'tela's Reality, Infinity and Eternity Points
+are no longer dilated, and Antimatter, Infinity and Time Dimension multipliers are raised to the power of 1.5, plus
+0.25 for every Dimension you have destabilized. Outside that Reality it does nothing.
+<br>
+<br>
 Each Overclock can only be bought once and has a requirement which must be met before it can be bought. Overclocks
 are never reset by any prestige layer and cannot be refunded. Purchased effects are active while both their individual toggle and the master switch are on.
 <br>
@@ -294,7 +299,7 @@ are never reset by any prestige layer and cannot be refunded. Purchased effects 
 Overclock has no effect during a Speedrun.
 `,
       isUnlocked: () => true,
-      tags: ["overclock", "time", "flow", "speed", "fast", "accelerate", "interest", "offline"],
+      tags: ["overclock", "time", "flow", "speed", "fast", "accelerate", "interest", "offline", "laitela"],
       tab: "overclock/upgrades"
     }, {
       name: "Antimatter Dimensions",

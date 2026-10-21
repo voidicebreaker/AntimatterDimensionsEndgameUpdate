@@ -20,6 +20,9 @@ export default {
       raChunkMultiplier: 1,
       raMemoryMultiplier: 1,
       hasRaSingularity: false,
+      hasDarkReactor: false,
+      isReactorActive: false,
+      laitelaPower: 1,
     };
   },
   computed: {
@@ -49,6 +52,9 @@ export default {
       this.raChunkMultiplier = OverclockUpgrade(29).effectOrDefault(1);
       this.raMemoryMultiplier = OverclockUpgrade(30).effectOrDefault(1);
       this.hasRaSingularity = OverclockUpgrade(31).isEffectActive;
+      this.hasDarkReactor = OverclockUpgrade(32).isEffectActive;
+      this.isReactorActive = Overclock.isLaitelaReactorActive;
+      this.laitelaPower = Overclock.laitelaPower;
     },
     toggle() {
       Overclock.setEnabled(!this.isEnabled);
@@ -119,6 +125,14 @@ export default {
           level {{ formatInt(60) }}. Each pet's multiplier is shown on the Ra tab.
           <br>
         </template>
+      </template>
+      <template v-if="hasDarkReactor">
+        <span v-if="isReactorActive">
+          Dark Reactor: Dimension multipliers {{ formatPow(laitelaPower, 2, 2) }} and no Infinity or Eternity Point
+          dilation in this Lai'tela Reality.
+        </span>
+        <span v-else>Dark Reactor is idle until you enter Lai'tela's Reality.</span>
+        <br>
       </template>
       <span v-if="hasOffline">Night Shift applies {{ formatPercents(0.3) }} of the extra Time Flow speed offline.</span>
       <span v-else>Time Flow does not apply while you are offline.</span>

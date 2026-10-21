@@ -12,7 +12,7 @@ export const IP = {
     // This effectively hides everything if the player can't actually gain any
     multValue: () => (Player.canCrunch ? gainedInfinityPoints() : 1),
     isActive: () => PlayerProgress.infinityUnlocked() || Player.canCrunch,
-    dilationEffect: () => (Laitela.isRunning ? 0.75 * Effects.product(DilationUpgrade.dilationPenalty) : 1),
+    dilationEffect: () => (Laitela.isRunning && !Overclock.isLaitelaReactorActive ? 0.75 * Effects.product(DilationUpgrade.dilationPenalty) : 1),
     isDilated: true,
     overlay: ["∞", "<i class='fa-solid fa-layer-group' />"],
   },

@@ -135,6 +135,8 @@ export function getDimensionFinalMultiplierUncached(tier) {
 
   if (player.universes.current === 1) multiplier = dilateMultiplier(multiplier, Decimal.pow(0.1, Decimal.pow(0.9, Currency.relativisticParticles.value.max(10).log10().log10().pow(2))));
 
+  if (tier !== 9) multiplier = multiplier.pow(Overclock.laitelaPower);
+
   if (tier === 9) multiplier = multiplier.max(10).log10();
   if (tier === 9) {
     multiplier = multiplier.timesEffectsOf(DualityUpgrade(30));

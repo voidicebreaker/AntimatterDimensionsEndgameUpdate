@@ -199,7 +199,7 @@ export function gainedInfinityPoints() {
     ip = ip.pow(0.55);
   } else if (V.isRunning) {
     ip = ip.pow(0.5);
-  } else if (Laitela.isRunning) {
+  } else if (Laitela.isRunning && !Overclock.isLaitelaReactorActive) {
     ip = dilatedValueOf(ip);
   }
   if (GlyphAlteration.isAdded("infinity")) {
@@ -284,7 +284,7 @@ export function gainedEternityPoints() {
     ep = ep.pow(0.55);
   } else if (V.isRunning) {
     ep = ep.pow(0.5);
-  } else if (Laitela.isRunning) {
+  } else if (Laitela.isRunning && !Overclock.isLaitelaReactorActive) {
     ep = dilatedValueOf(ep);
   }
   if (GlyphAlteration.isAdded("time")) {

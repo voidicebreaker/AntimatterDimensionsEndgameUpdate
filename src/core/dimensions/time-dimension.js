@@ -326,6 +326,8 @@ class TimeDimensionState extends DimensionState {
       mult = mult.pow(0.5);
     }
 
+    mult = mult.pow(Overclock.laitelaPower);
+
     if (SlabdrillUnlocks.timeStudy181.isUnlocked) mult = mult.pow(0.75);
 
     if (tier === 3 && Ascensions.sacA.isUnlocked) mult = mult.powEffectOf(TimeStudy(73));

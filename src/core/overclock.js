@@ -14,8 +14,9 @@ class OverclockUpgradeState extends BitPurchasableMechanicState {
     return this.config.currency();
   }
 
+  // Shifts in JS wrap at 32, so id 32 lives in bit 0 (no upgrade has id 0)
   get bitIndex() {
-    return this.id;
+    return this.id % 32;
   }
 
   get bits() {
@@ -31,7 +32,7 @@ class OverclockUpgradeState extends BitPurchasableMechanicState {
   }
 
   get isEnabled() {
-    return this.isBought && (player.overclock.disabledUpgradeBits & (1 << this.id)) === 0;
+    return this.isBought && (player.overclock.disabledUpgradeBits & (1 << this.bitIndex)) === 0;
   }
 
   get isEffectActive() {
@@ -40,8 +41,8 @@ class OverclockUpgradeState extends BitPurchasableMechanicState {
 
   setEnabled(enabled) {
     if (!this.isBought) return false;
-    if (enabled) player.overclock.disabledUpgradeBits &= ~(1 << this.id);
-    else player.overclock.disabledUpgradeBits |= (1 << this.id);
+    if (enabled) player.overclock.disabledUpgradeBits &= ~(1 << this.bitIndex);
+    else player.overclock.disabledUpgradeBits |= (1 << this.bitIndex);
     Overclock.invalidateMultipliers();
     GameUI.update();
     return true;
@@ -172,6 +173,15 @@ export const Overclock = {
 
   get celestialMultiplier() {
     return this.scoreMultiplier * (OverclockUpgrade(18).isEffectActive ? this.interestMultiplier : 1);
+  },
+
+  get isLaitelaReactorActive() {
+    return OverclockUpgrade(32).isEffectActive && Laitela.isRunning;
+  },
+
+  // Dark Reactor's power to Dimension multipliers grows as Lai'tela takes Dimensions away
+  get laitelaPower() {
+    return this.isLaitelaReactorActive ? 1.5 + 0.25 * Laitela.difficultyTier : 1;
   },
 
   // Achievements and Celestials get taken away by some resets, so the upgrades which count them use the highest

@@ -206,6 +206,8 @@ class InfinityDimensionState extends DimensionState {
       mult = mult.pow(0.5);
     }
 
+    mult = mult.pow(Overclock.laitelaPower);
+
     if (PelleStrikes.powerGalaxies.hasStrike && !PelleStrikes.powerGalaxies.isDestroyed()) {
       mult = mult.pow(0.5);
     }

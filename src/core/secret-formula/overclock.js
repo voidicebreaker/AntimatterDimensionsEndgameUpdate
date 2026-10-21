@@ -7,6 +7,7 @@ import { scaleOverclockMultiplier } from "../overclock-balance";
 //   "score"   - scales a matching prestige currency gain with Time Flow
 //   "gain"    - multiplies all prestige currency gains, stacking with Interest upgrades
 //   "offline" - makes offline progress use Time Flow as well
+//   "laitela" - lifts Lai'tela's Reality penalties and powers up Dimensions inside it
 //
 // `checkRequirement` is evaluated live; an upgrade which has already been bought is never lost again.
 
@@ -411,6 +412,21 @@ export const overclockUpgrades = [
     description: () => `Each pet produces Memories ${formatX(1000)} faster. Above level ${formatInt(60)}, ` +
       "this bonus also grows in proportion to that pet's next-level Memory cost. Stacks with Memory Accelerator",
     effect: 1000,
+  },
+  {
+    id: 32,
+    name: "Dark Reactor",
+    kind: "laitela",
+    requirement: "Unlock Lai'tela",
+    checkRequirement: () => Laitela.isUnlocked,
+    currency: () => Currency.realityMachines,
+    currencyName: "Reality Machine",
+    cost: 1e50,
+    description: () => `Inside Lai'tela's Reality, Infinity and Eternity Points are no longer dilated, and ` +
+      `Antimatter, Infinity and Time Dimension multipliers are raised ${formatPow(1.5, 2, 2)}, ` +
+      `with +${format(0.25, 2, 2)} to that power for every destabilized Dimension`,
+    effect: () => Overclock.laitelaPower,
+    formatEffect: value => (value > 1 ? formatPow(value, 2, 2) : "Inactive"),
   },
 ].map(config => {
   // Scale the extra benefit once, after evaluating any dynamic growth or condition.
